@@ -1,5 +1,5 @@
 ## directory where the gps files are located
-GPS_FILE_DIRECTORY = "chiledata/"
+GPS_FILE_DIRECTORY = "sampledata/"
 
 ## file extension of the gps files
 GPS_FILE_EXTENSION = "*.xlsx"
@@ -28,3 +28,9 @@ SANTIAGO_RADIUS = 60
 # this is a hack, needs to be fixed
 SANTI_LAT = '-33.469994'
 SANTI_LON = '-70.642193'
+
+# url to access cartodb
+CARTO_URL = "https://<username>.cartodb.com/api/v1/imports/?api_key="
+
+# api key for CARTO_DB. set this before sending data to cartodb
+CARTO_DB_API_KEY = "<API_KEY_HERE>"
