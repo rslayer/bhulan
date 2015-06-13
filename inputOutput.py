@@ -1,3 +1,7 @@
+from classes import *
+from util import getTime, addIfKey
+import ast
+
 import requests
 
 API_KEY = "0938198967c61b688987b732da2cb47854c825c4"
@@ -10,6 +14,50 @@ def sendtoCartodb(fileloc):
     print r.text
     return '0'
 
-#headers = {'Authorization': 'bearer 0DwdUsqII2ApAJ8nPsZJfYxzFImzIsa8oeBus2VXPlUlMF95v32r2UmEC1SOzmIYsswuvfwXKicpqhpp6psi1YL2kmtWqAQVBi5iT0C9kXRGRwLEQ5MtiTeyUUwNvWkP0FnID8RUi0FxvYQCo321IIy7smrWXkfHHySI8yuJnE8sTSBRjwcr6NzBV7xk2KyjWunPHG6lzQA1QPIjMRf9JcxEachEKuQc691i1qXnGcVCtOLXLslUWYOIW3VDQj0l'}
-#r = requests.get("http://api.wisesystems.com/v1/vehicles",headers=headers)
+def getLineForItems(items):
+    length = len(items)
+    line = ""
+    for i in range(length):
+        item = items[i]
+        line += str(item)
+        if i != length - 1:
+            line += ","
+        else:
+            line += "\n"
+    return line
+
+
+def writeNodes(db):
+    # fileName = "/home/ubuntu/mapData/%s/nodes" % db
+    fileName = "/Users/alikamil/Desktop/crowdSOS-v2.0/mapData/%s/nodes" % db
+    f = open(fileName, "w")
+
+    nodes = Node.getItemList(db)
+    for node in nodes:
+        items = [node.id, node.lat, node.lon]
+        line = getLineForItems(items)
+        f.write(line)
+
+    f.close()
+
+
+def writeEdges(db):
+    #fileName = "/home/ubuntu/mapData/%s/edges" % db
+    fileName = "/Users/alikamil/Desktop/crowdSOS-v2.0/mapData/%s/edges" % db
+    f = open(fileName, "w")
+    #id, cost, startNodeId, endNodeId, startLat, startLon, endLat, endLon
+    edges = Edge.getItemList(db)
+    for edge in edges:
+        items = [edge.id,edge.cost, edge.startNodeId,edge.endNodeId,edge.startPoint.lat,
+                 edge.startPoint.lon,edge.endPoint.lat, edge.endPoint.lon]
+        line = getLineForItems(items)
+        f.write(line)
+
+    f.close()
+
+
+if __name__ == '__main__':
+    print 'text'
+
+
 

@@ -16,3 +16,15 @@ MIN_STOP_TIME = 10
 # if a gps point is recorded within this variable meter radius of a stop location
 # it is considered part of the stop location
 CONSTRAINT = .02
+
+# hours that a vehicle has to stay at a stop for it to be considered a DC or home
+DC_HOURS = 4
+
+# radius in miles, to create a geo-fence around a city center and only
+# consider points within that zone.
+SANTIAGO_RADIUS = 60
+
+# lat long for Santiago, used to calculate points within the city
+# this is a hack, needs to be fixed
+SANTI_LAT = '-33.469994'
+SANTI_LON = '-70.642193'

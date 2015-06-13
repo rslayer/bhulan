@@ -1,20 +1,20 @@
 import sys
 import traceback
-from importChileTrucks import importAll
-from stopStats import saveStopDataToDb, initCompute
+from processVehicles import importTrucks, initCompute
+from processStops import saveComputedStops
 from util import notify, getTime
 from constants import *
 from pymongo import MongoClient
 
 #Chile Data needed in /data/chile
 def trucks():
-    importAll()
+    importTrucks()
 
 def compute():
     initCompute()
 
 def stops():
-    saveStopDataToDb()
+    saveComputedStops()
     return 0
 
 def run(func, args):
@@ -53,6 +53,8 @@ def deleteEverything(db):
 
 if __name__ == '__main__':
 
+    #importTrucks()
+    compute()
 
     if len(sys.argv) == 2:
         if sys.argv[1] == "all":
