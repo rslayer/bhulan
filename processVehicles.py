@@ -307,7 +307,3 @@ def importTrucks(db=WATTS_DATA_DB_KEY, delete=True):
         readData(filename, db)
 
 ################# End Core Functions #################
-
-if __name__ == '__main__':
-    print findStopsAll(trucks='11FC6904',datenums=275)
-    print "### DONE ###"

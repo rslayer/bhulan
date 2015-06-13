@@ -5,7 +5,6 @@ from processStops import saveComputedStops
 from util import notify, getTime
 from pymongo import MongoClient
 
-#Chile Data needed in /data/chile
 def trucks():
     importTrucks()
 
@@ -51,9 +50,6 @@ def deleteEverything(db):
     client.drop_database(db)
 
 if __name__ == '__main__':
-
-    #importTrucks()
-    compute()
 
     if len(sys.argv) == 2:
         if sys.argv[1] == "all":
