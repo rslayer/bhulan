@@ -1,11 +1,7 @@
-from mongo import *
-from classes import TruckPoint, Truck, Point, TruckDates
 from init import *
 import glob
 from computed import *
-from datetime import *
 import xlrd
-from inputOutput import getLineForItems
 from util import (notify, throwException, kilDist, mileDist, getDate, getDateNum, getClockTime, getSeconds,
                   getMinutes, getHours, getDateForChile, getDateNumForChile)
 COMPUTED = None

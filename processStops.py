@@ -6,10 +6,6 @@ from computed import *
 from inputOutput import getLineForItems
 from processVehicles import findStopsAll
 
-# getStopStatistics collects statistics on all stops found
-# Stores - Truck ID, DateNum, Stop Time, Stop Location, Frequency
-# on a given day. Uses findPointsall function for a given datenum
-
 EMORNING = 'emorning'
 LMORNING = 'lmorning'
 AFTERNOON = 'afternoon'

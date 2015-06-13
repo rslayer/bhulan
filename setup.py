@@ -3,7 +3,6 @@ import traceback
 from processVehicles import importTrucks, initCompute
 from processStops import saveComputedStops
 from util import notify, getTime
-from constants import *
 from pymongo import MongoClient
 
 #Chile Data needed in /data/chile
