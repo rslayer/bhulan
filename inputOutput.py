@@ -1,6 +1,7 @@
 from classes import *
 from util import getTime, addIfKey
 import ast
+from init import *
 
 import requests
 
@@ -22,8 +23,6 @@ def getLineForItems(items):
             line += "\n"
     return line
 
-if __name__ == '__main__':
-    print 'text'
 
 
 
