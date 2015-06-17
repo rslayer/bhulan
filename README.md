@@ -11,3 +11,16 @@ An opensource python library for GPS data processing
     * File Directory - directory location of the GPS files to be processed
     * File Extension - extension of the file. This will determine how the system imports the file. Currently supporting excel files. Future iterations will have support for csv files
 * run *setup.py* to import trucks, compute properties, and compute stops
+
+# key properties
+* getTruckPoints - returns all the truck points for a given truck (truckId). It will return the points for that day if date is proved (datenum)
+* getStopsFromTruckDate – returns all stops for that truck and date
+* getStopPropsFromTruckDate – returns all stop properties for that truck and date
+* getStopStatistics – returns key stats for stops. Can return for specific truck and date.
+* getTruckScheduleForDay – returns a truck schedule for a given day – schedule is the order of stops for that day.
+* findDCs – returns the estimated location of a Distribution Center based on the stop data
+
+# Stop and Stop Properties
+* A Stop is the 20 meter geographical radius where we have observed multiple gps points from a truck for greater than 10 minutes. 
+* A StopProperty contains details of each observed point within a Stop (20 meter radius location).
+* A stop will have multiple stop properties. 

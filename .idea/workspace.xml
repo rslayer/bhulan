@@ -38,7 +38,7 @@
       <file leaf-file-name="init.py" pinned="false" current="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/init.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state vertical-scroll-proportion="0.0" vertical-offset="0" max-vertical-offset="645">
+            <state vertical-scroll-proportion="0.0" vertical-offset="180" max-vertical-offset="645">
               <caret line="0" column="44" selection-start-line="0" selection-start-column="44" selection-end-line="0" selection-end-column="44" />
               <folding />
             </state>
@@ -57,15 +57,28 @@
           </provider>
         </entry>
       </file>
-      <file leaf-file-name="processStops.py" pinned="false" current="true" current-in-tab="true">
+      <file leaf-file-name="processStops.py" pinned="false" current="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/processStops.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state vertical-scroll-proportion="14.56492" vertical-offset="611" max-vertical-offset="7095">
-              <caret line="467" column="0" selection-start-line="467" selection-start-column="0" selection-end-line="467" selection-end-column="0" />
+            <state vertical-scroll-proportion="-71.11539" vertical-offset="5021" max-vertical-offset="7095">
+              <caret line="458" column="26" selection-start-line="458" selection-start-column="4" selection-end-line="458" selection-end-column="26" />
               <folding>
                 <element signature="e#0#15#0" expanded="true" />
               </folding>
             </state>
+          </provider>
+        </entry>
+      </file>
+      <file leaf-file-name="README.md" pinned="false" current="true" current-in-tab="true">
+        <entry file="file://$PROJECT_DIR$/README.md">
+          <provider selected="true" editor-type-id="text-editor">
+            <state vertical-scroll-proportion="0.85820895" vertical-offset="0" max-vertical-offset="465">
+              <caret line="23" column="49" selection-start-line="23" selection-start-column="49" selection-end-line="23" selection-end-column="49" />
+              <folding />
+            </state>
+          </provider>
+          <provider editor-type-id="MarkdownPreviewEditor">
+            <state />
           </provider>
         </entry>
       </file>
@@ -134,11 +147,11 @@
         <option value="$PROJECT_DIR$/stopStats.py" />
         <option value="$PROJECT_DIR$/util.py" />
         <option value="$PROJECT_DIR$/processVehicles.py" />
-        <option value="$PROJECT_DIR$/README.md" />
         <option value="$PROJECT_DIR$/setup.py" />
         <option value="$PROJECT_DIR$/init.py" />
         <option value="$PROJECT_DIR$/inputOutput.py" />
         <option value="$PROJECT_DIR$/processStops.py" />
+        <option value="$PROJECT_DIR$/README.md" />
       </list>
     </option>
   </component>
@@ -723,17 +736,6 @@
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/README.md">
-      <provider selected="true" editor-type-id="text-editor">
-        <state vertical-scroll-proportion="0.48507464" vertical-offset="0" max-vertical-offset="402">
-          <caret line="13" column="0" selection-start-line="13" selection-start-column="0" selection-end-line="13" selection-end-column="0" />
-          <folding />
-        </state>
-      </provider>
-      <provider editor-type-id="MarkdownPreviewEditor">
-        <state />
-      </provider>
-    </entry>
     <entry file="file://$PROJECT_DIR$/setup.py">
       <provider selected="true" editor-type-id="text-editor">
         <state vertical-scroll-proportion="0.0" vertical-offset="15" max-vertical-offset="1065">
@@ -741,14 +743,6 @@
           <folding>
             <element signature="e#0#10#0" expanded="true" />
           </folding>
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/init.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state vertical-scroll-proportion="0.0" vertical-offset="0" max-vertical-offset="645">
-          <caret line="0" column="44" selection-start-line="0" selection-start-column="44" selection-end-line="0" selection-end-column="44" />
-          <folding />
         </state>
       </provider>
     </entry>
@@ -762,14 +756,33 @@
         </state>
       </provider>
     </entry>
+    <entry file="file://$PROJECT_DIR$/init.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="0.0" vertical-offset="180" max-vertical-offset="645">
+          <caret line="0" column="44" selection-start-line="0" selection-start-column="44" selection-end-line="0" selection-end-column="44" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
     <entry file="file://$PROJECT_DIR$/processStops.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state vertical-scroll-proportion="14.56492" vertical-offset="611" max-vertical-offset="7095">
-          <caret line="467" column="0" selection-start-line="467" selection-start-column="0" selection-end-line="467" selection-end-column="0" />
+        <state vertical-scroll-proportion="-71.11539" vertical-offset="5021" max-vertical-offset="7095">
+          <caret line="458" column="26" selection-start-line="458" selection-start-column="4" selection-end-line="458" selection-end-column="26" />
           <folding>
             <element signature="e#0#15#0" expanded="true" />
           </folding>
         </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/README.md">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="0.85820895" vertical-offset="0" max-vertical-offset="465">
+          <caret line="23" column="49" selection-start-line="23" selection-start-column="49" selection-end-line="23" selection-end-column="49" />
+          <folding />
+        </state>
+      </provider>
+      <provider editor-type-id="MarkdownPreviewEditor">
+        <state />
       </provider>
     </entry>
   </component>
