@@ -20,7 +20,7 @@ An opensource python library for GPS data processing
 * getTruckScheduleForDay – returns a truck schedule for a given day – schedule is the order of stops for that day.
 * findDCs – returns the estimated location of a Distribution Center based on the stop data
 
-# stop and stop Properties
+# stop and stop properties
 * A Stop is the 20 meter geographical radius where we have observed multiple gps points from a truck for greater than 10 minutes. 
 * A StopProperty contains details of each observed point within a Stop (20 meter radius location).
 * A stop will have multiple stop properties. 
