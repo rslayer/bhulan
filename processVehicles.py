@@ -236,9 +236,7 @@ def findStopsAll(db=WATTS_DATA_DB_KEY, constraint=None, trucks=None,datenums=Non
             for s in stops:
                 dat = [dns,truckId, s['point'].lat, s['point'].lon, s['radius'],s['startStop'][0],s['startStop'][1]]
                 stopsAll.append(dat)
-                break
-            break
-        break
+
     return stopsAll
 
 ################# End Helper Funcs #######################
@@ -249,8 +247,7 @@ def initCompute(db=WATTS_DATA_DB_KEY):
     computeTruckDateCombos(db)
     notify("computed truck dates")
     computeRouteCenters(db)
-
-COMPUTED = Computed()
+    COMPUTED = Computed()
 
 
 def createMongoItem(code, patent, timestamp, lat, lon, direction, commune, velocity, temperature, driver, capacity):
@@ -282,7 +279,7 @@ def readData(filename, db):
     count = 0
     while curr_row < num_rows:
         row = worksheet.row(curr_row)
-        code, patent, timestamp, lat, lon, direction, commune, velocity, temperature, driver, capacity = [x.value for x in row]
+        code, patent, timestamp, lat, lon, direction, commune, velocity, temperature, temp2, event, driver, capacity = [x.value for x in row]
         item = createMongoItem(code, patent, timestamp, lat, lon, direction, commune, velocity, temperature, driver, capacity)
         items.append(item)
         curr_row += 1
@@ -298,12 +295,14 @@ def pointsStraight(truckId, db):
     return TruckPoint.findItem(TRUCK_ID_KEY, truckId, db)
 
 def importTrucks(db=WATTS_DATA_DB_KEY, delete=True):
-    TruckPoint.deleteItems(db)
     if delete:
         TruckPoint.deleteItems(db)
 
     filenames = glob.glob(GPS_FILE_DIRECTORY+GPS_FILE_EXTENSION)
     for filename in filenames:
-        readData(filename, db)
+        if '$' in filename or '~' in filename:
+            continue
+        else:
+            readData(filename, db)
 
 ################# End Core Functions #################

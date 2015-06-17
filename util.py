@@ -2,7 +2,7 @@ from constants import *
 import xlrd
 import math
 from datetime import *
-
+import time
 HEAP_ID_KEY = "heapId"
 PRIORITY_KEY = "priority"
 
@@ -81,7 +81,7 @@ def getHours(timestamp):
 def getTime(func, statement, *args):
     start = time.time()
     returnValue = func(*args)
-    print statement + ": " + str(time.time() - start)
+    print statement + ": " + str((time.time() - start))
 
     return returnValue
 

@@ -1,7 +1,7 @@
 import datetime
 import glob
 from init import *
-from util import (kilDist)
+from util import (kilDist,notify)
 from computed import *
 from inputOutput import getLineForItems
 from processVehicles import findStopsAll
@@ -160,18 +160,8 @@ def saveStopPropsDataToFile(db=WATTS_DATA_DB_KEY):
             line = getLineForItems(items)
             wf.write(line)
 
-def saveStopsDataToFile(db=WATTS_DATA_DB_KEY):
-    stops = Stop.getItems(db)
-
-    with open('/Users/alikamil/Desktop/stopsall.csv','w') as wf:
-        for i in stops.keys():
-            prop = stops[i]
-            items = [prop.id, prop.time]
-            line = getLineForItems(items)
-            wf.write(line)
-
 def saveStopsToFile(datenum):
-    filename = "/Users/alikamil/Desktop/santiago_truckstops/santi_truckstops_"+str(datenum)+".csv"
+    filename = GPS_FILE_DIRECTORY+"santi_truckstops_"+str(datenum)+".csv"
     wf = open(filename,'w')
     trucklist = getTruckList().keys()
     wf.write("id,datenum,lat,lng,duration,time, truckid\n")
@@ -194,7 +184,7 @@ def saveStopsToFile(datenum):
 def saveTruckDateCombosToFile(truckId,datenum, db=WATTS_DATA_DB_KEY):
     cnt = 0
     dict = getStopsFromTruckDate(truckId,datenum)
-    filename = "/Users/alikamil/Desktop/truckdata/"+truckId+"_"+str(datenum)+".csv"
+    filename = GPS_FILE_DIRECTORY+truckId+"_"+str(datenum)+".csv"
     wf = open(filename,'w')
     wf.write("truckid,datenum,lat,lng,time,duration\n")
     print "total:",len(dict)
@@ -214,7 +204,7 @@ def saveTruckDateCombosToFile(truckId,datenum, db=WATTS_DATA_DB_KEY):
 
 # stop ID, lat, lon, time of day, duration
 def computeStopData():
-    print 'processig stops - this process will take time, please be patient'
+    print 'processing stops for each truck and date - this will take time, please be patient'
     stops = {}
     stats = {}
     stopList = []
@@ -342,12 +332,9 @@ def saveComputedStops(db=WATTS_DATA_DB_KEY):
         stop[LON_KEY] = centroid.lon
 
         stopList.append(stop)
-        #print "printing PROPERTIES LIST\n"
-        #print stopPropList
-        # raise Exception('spam and eggs')
     saveStopsData(stopList,db, delete=True)
     saveStopsPropsData(stopPropList,db, delete=True)
-    #notify("computed stops and properties")
+    notify("computed stops and properties")
 
 
 def getStopByDuration(drtn,truckId=None):
@@ -438,37 +425,21 @@ def windowhelper(timewindow, time, i):
 def getTimeWindows(db=WATTS_DATA_DB_KEY):
     #counted as 0-1, 1-2, 1-3...23-0
     timewindow = {}
-    wfile = "/Users/alikamil/Desktop/windowFile.csv"
-    f = open(wfile, "w")
     stops = Stop.getItems(db)
     cnt = 0
     # looking for window by truck and date
     #qry = ({TRUCK_ID_KEY:"VG-3837",DATE_NUM_KEY:314, STOP_PROP_ID_KEY:stopId})
-    #
-    # for s in stops:
-    #     sts = stops[s]
-#sts.id
-    qry = ({STOP_PROP_ID_KEY:1})
-    #qry = ({STOP_PROP_ID_KEY:sts.id})
-    #ls = StopProperties.find(qry,CHILE_DATA_DB_KEY)
+
     ls = StopProperties.getItems(db)
     for prop in ls:
         i = ls[prop]
-        #print "Time:",i.time, "Duration:",i.duration
-        #print i.duration
         hour = getTime(int((i.duration).split(":")[0]),int((i.duration).split(":")[1])).hour
         #print time
         if hour < 4:
             windowhelper(timewindow,hour, i)
 
 
-    for tw in timewindow:
-        items = timewindow[tw]
-        for i in items:
-            tups = [i[0],i[1],i[2],i[3],i[4],i[5],i[6]]
-            line = getLineForItems(tups)
-            f.write(line)
-        #print tw,":", timewindow[tw]
+    return timewindow
 
 
 def getTruckList(db=WATTS_DATA_DB_KEY):

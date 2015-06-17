@@ -1,7 +1,9 @@
 ## directory where the gps files are located
+#GPS_FILE_DIRECTORY = "/Users/alikamil/Dropbox (MIT)/Edgar Ali Special Topics Shared Folder/Watts _CONFIDENTIAL/data-copyforwork"
 GPS_FILE_DIRECTORY = "sampledata/"
 
 ## file extension of the gps files
+# for now only handling excel files
 GPS_FILE_EXTENSION = "*.xlsx"
 
 

@@ -4,6 +4,7 @@ from processVehicles import importTrucks, initCompute
 from processStops import saveComputedStops
 from util import notify, getTime
 from pymongo import MongoClient
+from constants import WATTS_DATA_DB_KEY
 
 def trucks():
     importTrucks()
@@ -26,7 +27,7 @@ def run(func, args):
     try:
         getTime(func, message, *args)
         # func(*args)
-        notify(message)
+        #notify(message)
     except:
         print traceback.format_exc()
         notify(message + "failed")
@@ -45,11 +46,13 @@ def setupAll():
 
 ##
 # deletes the database and cleans up the collections
-def deleteEverything(db):
+def dataPurge(db):
     client = MongoClient()
     client.drop_database(db)
 
 if __name__ == '__main__':
+
+    setupAll()
 
     if len(sys.argv) == 2:
         if sys.argv[1] == "all":
