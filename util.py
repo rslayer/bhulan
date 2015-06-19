@@ -27,12 +27,8 @@ def getDate(timestamp):
     print "timestamp: " + str(timestamp)
     return xlrd.xldate_as_tuple(timestamp, 0)
 
-def getDateForChile(timestamp):
-    ts = timestamp.split(" ")
-    #print "Timestamp:" + str(ts)
-    dt = map(int, ts[0].split("-"))
-    tm = map(int, ts[1].split(":"))
-    dte = datetime(year=dt[2], month=dt[1], day=dt[0], hour=tm[0], minute=tm[1], second=tm[2])
+def getDateTime(ts):
+    dte = datetime(year=ts[0], month=ts[1], day=ts[2], hour=ts[3], minute=ts[4], second=ts[5])
     return dte
 
 def getDateNumForChile(timestamp):
@@ -44,7 +40,7 @@ def getDateNumForChile(timestamp):
 
 #excel function
 def getDateNum(timestamp):
-    year, month, day, hour, minute, second = xlrd.xldate_as_tuple(timestamp, 0)
+    year, month, day, hour, minute, second = [x for x in timestamp]#xlrd.xldate_as_tuple(timestamp, 0)
     return month * MONTH_NUM + day
 
 #excel function
@@ -84,6 +80,16 @@ def getTime(func, statement, *args):
     print statement + ": " + str((time.time() - start))
 
     return returnValue
+
+def toIso(sttime):
+    date_object = datetime.strptime(sttime,'%H:%M:%S')
+    return date_object.isoformat()
+
+def xldate_to_datetime(xldate):
+    temp = datetime(day=1, month=1, year=1900)
+    delta = timedelta(days=xldate)
+    x = temp+delta
+    return x.isoformat()
 
 ################ End Date Time Functions ################
 

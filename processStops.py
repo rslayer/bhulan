@@ -1,9 +1,9 @@
 import datetime
 import glob
 from init import *
-from util import (kilDist,notify)
+from util import (kilDist,notify,toIso)
 from computed import *
-from inputOutput import getLineForItems
+#from inputOutput import getLineForItems
 from processVehicles import findStopsAll
 
 EMORNING = 'emorning'
@@ -17,9 +17,18 @@ MNTOMORN = 'mntomorn'
 
 # ################ Begin Database Helpers #######################
 
-def toIso(sttime):
-    date_object = datetime.strptime(sttime,'%H:%M:%S')
-    return date_object.isoformat()
+def getLineForItems(items):
+    length = len(items)
+    line = ""
+    for i in range(length):
+        item = items[i]
+        line += str(item)
+        if i != length - 1:
+            line += ","
+        else:
+            line += "\n"
+    return line
+
 
 def getDuration(t1, t2):
     #print t2-t1
@@ -149,55 +158,6 @@ def getStopPropsCombos(db=WATTS_DATA_DB_KEY,stopPropId=None,thresh=None):
 
     return stopPropCombos
 
-# helper to save stops data to file temporarily
-def saveStopPropsDataToFile(db=WATTS_DATA_DB_KEY):
-    stops = StopProperties.getItems(db)
-
-    with open('/Users/alikamil/Desktop/stoppropssall.csv','w') as wf:
-        for i in stops.keys():
-            prop = stops[i]
-            items = [prop.id, prop.time]
-            line = getLineForItems(items)
-            wf.write(line)
-
-def saveStopsToFile(datenum):
-    filename = GPS_FILE_DIRECTORY+"santi_truckstops_"+str(datenum)+".csv"
-    wf = open(filename,'w')
-    trucklist = getTruckList().keys()
-    wf.write("id,datenum,lat,lng,duration,time, truckid\n")
-
-    for t in trucklist:
-        stops = getStopPropsFromTruckDate(t, datenum)
-
-        for s in stops:
-            if inSantiago(s):
-                tm = s.time.split(":")
-                drt = s.duration.split(":")
-                dt = datetime(year=2014, month=9, day=1,hour=int(tm[0]), minute=int(tm[1]), second=int(tm[2]))
-                date = dt.strftime("%Y-%m-%d %H:%M:%S")
-                ls = [s.id, date, s.lat, s.lon,s.duration, dt.isoformat(), s.truckId]
-                line = getLineForItems(ls)
-                wf.write(line)
-
-    wf.close()
-
-def saveTruckDateCombosToFile(truckId,datenum, db=WATTS_DATA_DB_KEY):
-    cnt = 0
-    dict = getStopsFromTruckDate(truckId,datenum)
-    filename = GPS_FILE_DIRECTORY+truckId+"_"+str(datenum)+".csv"
-    wf = open(filename,'w')
-    wf.write("truckid,datenum,lat,lng,time,duration\n")
-    print "total:",len(dict)
-    for d in dict:
-        x = dict[d]
-        if inSantiago(x):
-            #print getStopPropsFromStopId(x.id)
-            ls = [truckId,datenum,x.lat, x.lon,toIso(x.time),x.duration]
-            line = getLineForItems(ls)
-            cnt +=1
-            wf.write(line)
-
-    wf.close()
 
 ################# End Database Helpers #######################
 

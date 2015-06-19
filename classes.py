@@ -199,10 +199,8 @@ class TruckPoint(DBItem):
         self.lon = item[LON_KEY]
         self.dateNum = item[DATE_NUM_KEY]
         self.temperature = item[TEMPERATURE_KEY]
-        self.driver = item[DRIVER_KEY]
         self.direction = item[DIRECTION_KEY]
         self.patent = item[PATENT_KEY]
-        self.capacity = item[CAPACITY_KEY]
         self.commune = item[COMMUNE_KEY]
         self.point = Point(self.lat, self.lon)
 
@@ -218,11 +216,9 @@ def save(self):
     self.item[LON_KEY] = self.lon
     self.item[DATE_NUM_KEY] = self.dateNum
     self.item[TEMPERATURE_KEY] = self.temperature
-    self.item[DRIVER_KEY] = self.driver
     self.item[DIRECTION_KEY] = self.direction
     self.item[PATENT_KEY] = self.patent
     self.item[COMMUNE_KEY] = self.commune
-    self.item[CAPACITY_KEY] = self.capacity
     super(Point, self).save(Point.tblKey)
 
 class Truck(DBItem):

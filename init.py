@@ -7,7 +7,7 @@ GPS_FILE_EXTENSION = "*.xlsx"
 
 
 ## name of the excel worksheet with GPS points
-WORKSHEET_NAME = "Detalle"
+WORKSHEET_NAME = "Hoja1"
 
 
 # minimum time at a given location that makes it a "stop" for the vehicle

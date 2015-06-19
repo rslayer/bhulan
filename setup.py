@@ -4,7 +4,7 @@ from processVehicles import importTrucks, initCompute
 from processStops import saveComputedStops
 from util import notify, getTime
 from pymongo import MongoClient
-from constants import WATTS_DATA_DB_KEY
+from inputOutput import saveStopsToFile
 
 def trucks():
     importTrucks()
@@ -51,8 +51,11 @@ def dataPurge(db):
     client.drop_database(db)
 
 if __name__ == '__main__':
-
-    setupAll()
+    #dataPurge(WATTS_DATA_DB_KEY)
+    trucks()
+    compute()
+    stops()
+    #setupAll()
 
     if len(sys.argv) == 2:
         if sys.argv[1] == "all":
