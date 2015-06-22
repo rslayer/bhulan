@@ -1,8 +1,8 @@
 # bhulan
 An opensource python library for GPS data processing
-[Bhulan](https://en.wikipedia.org/wiki/Indus_river_dolphin) enables quick processing of raw gps data to identify properties of a vehicle's movements within the given gps trace. Using the api, you can identify a vehicle's route, stops, duration of stops, schedules, and clusters of service. 
+[Bhulan](https://en.wikipedia.org/wiki/Indus_river_dolphin) enables quick processing of raw gps data to identify properties of a vehicle's movements within the given gps trace. Using the api, you can identify a vehicle's route, stops, duration of stops, schedules, and clusters of service among other properties. 
 
-# requirements
+# base requirements
 * [MongoDb 3.0.3](https://docs.mongodb.org/getting-started/shell/installation/)
 * [Python 2.7](https://www.python.org/download/releases/2.7/)
 
@@ -11,6 +11,19 @@ An opensource python library for GPS data processing
     * File Directory - directory location of the GPS files to be processed
     * File Extension - extension of the file. This will determine how the system imports the file. Currently supporting excel files. Future iterations will have support for csv files
 * run *setup.py* to import trucks, compute properties, and compute stops
+
+# import file format
+* the gps data to be processed by bhulan must be provided in a designated format
+* the input files must contain the following columns in the given format:
+    * vehicle id - unique identifier of the vehicle
+    * date and time - the date and time of the record. the date must be provided in [ISO 8601 format](https://en.wikipedia.org/wiki/ISO_8601)
+    * latitude - the current latitude of the vehicle location
+    * longitude - the current longitude of the vehicle location
+    * direction - the direction of the vehicle
+    * velocity - the current observed velocity of the vehicle
+    * temperature - the current outside temperature
+    
+refer to the sample file in the sampledata folder. 
 
 # key properties
 * getTruckPoints - returns all the truck points for a given truck (truckId). It will return the points for that day if date is proved (datenum)
@@ -23,4 +36,4 @@ An opensource python library for GPS data processing
 # stop and stop properties
 * A Stop is the 20 meter geographical radius where we have observed multiple gps points from a truck for greater than 10 minutes. 
 * A StopProperty contains details of each observed point within a Stop (20 meter radius location).
-* A stop will have multiple stop properties. 
+* A stop will have multiple stop properties.
