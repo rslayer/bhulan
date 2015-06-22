@@ -4,7 +4,7 @@ from computed import *
 import xlrd
 import datetime
 from util import (notify, throwException, kilDist, mileDist, getDate, getDateNum, getClockTime, getSeconds,
-                  getMinutes, getHours, getDateTime, getDateNumForChile, xldate_to_datetime)
+                  getMinutes, getHours, getDateTime, getDateNumForChile, xldate_to_datetime, getExcelDate)
 COMPUTED = None
 SAMPLE_RATE = 100
 MAX_DISTANCE = 5
@@ -280,8 +280,12 @@ def readData(filename, db):
         row = worksheet.row(curr_row)
 
         code, patent, day, hour, lat, lon, direction, commune, velocity, temperature, temp2 = [x.value for x in row]
-        timestamp = xlrd.xldate_as_tuple(day+hour,0)
+        try:
+            timestamp = xlrd.xldate_as_tuple(day+hour,0)
+        except TypeError:
+            timestamp = xlrd.xldate_as_tuple(float(getExcelDate(day))+hour,0)
 
+        #throwException('testing this out')
         item = createMongoItem(code, patent, timestamp, lat, lon, direction, commune, velocity, temperature)
         items.append(item)
         curr_row += 1

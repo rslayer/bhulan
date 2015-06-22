@@ -91,6 +91,13 @@ def xldate_to_datetime(xldate):
     x = temp+delta
     return x.isoformat()
 
+def getExcelDate(date):
+    dt = date.split('-')
+    dt = datetime(day=int(dt[0]),month=int(dt[1]),year=int(dt[2]))
+    temp = datetime(1899, 12, 30)
+    delta = dt - temp
+    return float(delta.days) + (float(delta.seconds) / 86400)
+
 ################ End Date Time Functions ################
 
 ################ Begin Distance Functions ################
