@@ -281,6 +281,7 @@ def saveComputedStops(db=WATTS_DATA_DB_KEY):
         stopList.append(stop)
     saveStopsData(stopList,db, delete=True)
     saveStopsPropsData(stopPropList,db, delete=True)
+    return stopPropList
 
 # to be implemented
 #def getStopByDuration(drtn,truckId=None):

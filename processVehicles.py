@@ -231,7 +231,7 @@ def findStopsAll(db=WATTS_DATA_DB_KEY, constraint=None, trucks=None,datenums=Non
 
     for dns in datenums:
         for truckId in trucks:
-            #print 'processing: '+str(truckId)+' for date: '+str(dns)
+            print 'processing: '+str(truckId)+' for date: '+str(dns)
             stops = findStops(truckId, dns, db, constraint)
             for s in stops:
                 dat = [dns,truckId, s['point'].lat, s['point'].lon, s['radius'],s['startStop'][0],s['startStop'][1]]

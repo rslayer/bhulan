@@ -58,11 +58,13 @@ if __name__ == '__main__':
     # trucks()
     # compute()
     #stops()
-    setupAll()
-    # i = 269
-    # while i < 280:
-    #     saveStopsToFile(i)
-    #     i+=1
+    #setupAll()
+    i = 218
+    while i < 221:
+        saveStopsToFile(i)
+        i+=1
+
+    #saveStopsToFile(216)
 
     if len(sys.argv) == 2:
         if sys.argv[1] == "all":

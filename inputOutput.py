@@ -25,6 +25,7 @@ def saveStopsToFile(datenum):
     wf = open(filename,'w')
     trucklist = getTruckList().keys()
     wf.write("id,datenum,lat,lng,duration,time, truckid\n")
+    ts = getDateByDatenum(datenum).split('-')
 
     for t in trucklist:
         stops = getStopPropsFromTruckDate(t, datenum)
@@ -32,10 +33,9 @@ def saveStopsToFile(datenum):
         for s in stops:
             if inSantiago(s):
                 tm = s.time.split(":")
-                ts = getDateByDatenum(datenum).split('-')
                 dt = datetime.datetime(year=int(ts[0]), month=int(ts[1]), day=int(ts[2]),
                                        hour=int(tm[0]), minute=int(tm[1]), second=int(tm[2]))
-                date = dt.strftime("%Y-%m-%d %H:%M:%S")
+                date = dt.isoformat()#.strftime("%Y-%m-%d %H:%M:%S")
                 ls = [s.id, date, s.lat, s.lon,s.duration, dt.isoformat(), s.truckId]
                 line = getLineForItems(ls)
                 wf.write(line)
