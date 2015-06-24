@@ -1,10 +1,8 @@
 import datetime
-import glob
 from init import *
 from util import (kilDist,notify,toIso)
-from computed import *
-#from inputOutput import getLineForItems
 from processVehicles import findStopsAll
+from classes import *
 
 EMORNING = 'emorning'
 LMORNING = 'lmorning'
@@ -29,6 +27,8 @@ def getLineForItems(items):
             line += "\n"
     return line
 
+def getDateByDatenum(datenum):
+    return (((getTruckPointsByDateNum(WATTS_DATA_DB_KEY,datenum))[0].timestamp).split('T')[0])
 
 def getDuration(t1, t2):
     #print t2-t1
@@ -54,18 +54,21 @@ def getTrucks(db):
     tbl = TruckPoint.getTbl(db)
     return tbl.distinct(TRUCK_ID_KEY)
 
+def getTruckPointsByDateNum(db, dateNum):
+    return TruckPoint.find({DATE_NUM_KEY: dateNum}, db)
+
 def getTruckPoints(truckId, db, dateNum=None):
     if dateNum == None:
         return TruckPoint.findItemList(TRUCK_ID_KEY, truckId, db)
     return TruckPoint.find({TRUCK_ID_KEY: truckId, DATE_NUM_KEY: dateNum}, db)
 
-# def getStops(db):
-#     tbl = Stop.getTbl(db)
-#     return tbl.distinct(ID_KEY)
-#
-# def getStopProperties(db):
-#     tbl = StopProperties.getTbl(db)
-#     return tbl.distinct(STOP_PROP_ID_KEY)
+def getStops(db):
+    tbl = Stop.getTbl(db)
+    return tbl.distinct(ID_KEY)
+
+def getStopProperties(db):
+    tbl = StopProperties.getTbl(db)
+    return tbl.distinct(STOP_PROP_ID_KEY)
 
 def saveStopsData(items, db, delete=False):
     Stop.saveItems(items,db,delete)
@@ -74,10 +77,10 @@ def saveStopsPropsData(items, db, delete=False):
     StopProperties.saveItems(items,db, delete)
 
 # def deleteStopsDb(db):
-# #    getStopsDb(client).remove()
+#     getStopsDb(client).remove()
 #
 # def deleteStopsPropsDb(db):
-    #   getStopsPropsDb(client).remove()
+#     getStopsPropsDb(client).remove()
 
 
 def getStopPropsFromTruckDate(truckId, dateNum=None, db=WATTS_DATA_DB_KEY):
@@ -98,8 +101,6 @@ def getStopsFromTruckDate(truckId, dateNum=None, db=WATTS_DATA_DB_KEY):
     else:
         props = StopProperties.find({TRUCK_ID_KEY: truckId, DATE_NUM_KEY: dateNum}, db)
         stops = {}
-        #print len(props)
-        #print 'hello world'
         for s in props:
             x = Stop.findItem(ID_KEY,s.stopPropId, db)
             #print x.id,
@@ -116,26 +117,13 @@ def getStopsFromTruckDate(truckId, dateNum=None, db=WATTS_DATA_DB_KEY):
 def getStopFromStopPropId(stopPropId, db=WATTS_DATA_DB_KEY):
     props = StopProperties.findItem(ID_KEY,stopPropId,db)
     return Stop.findItem(ID_KEY,props.stopPropId,db)
-    #{ID_KEY: stopPropId}, db)
+
 def getStopPropsFromStopId(stopId, db=WATTS_DATA_DB_KEY):
     return StopProperties.findItems(STOP_PROP_ID_KEY,stopId,db)
 
 def getStopTruckDateCombos(db=WATTS_DATA_DB_KEY, truckId=None, dateNum=None, stopPropId=None):
 
     return StopProperties.find({TRUCK_ID_KEY:truckId, DATE_NUM_KEY:dateNum, STOP_PROP_ID_KEY:stopPropId},db)
-
-    # if dateNum and truckId and stopPropId:
-    #     print 1
-    #     return StopProperties.find({TRUCK_ID_KEY:truckId, DATE_NUM_KEY:dateNum, ID_KEY:stopPropId},db)
-    # elif dateNum and truckId:
-    #     print 2
-    #     return StopProperties.find({TRUCK_ID_KEY:truckId, DATE_NUM_KEY:dateNum, STOP_PROP_ID_KEY:stopId},db)
-    # elif dateNum and stopPropId:
-    #     print 3
-    #     return StopProperties.find({DATE_NUM_KEY:dateNum, ID_KEY:stopPropId, STOP_PROP_ID_KEY:stopId},db)
-    # elif stopPropId and truckId:
-    #     print 4
-    #     return StopProperties.find({TRUCK_ID_KEY:truckId, ID_KEY:stopPropId, STOP_PROP_ID_KEY:stopId},db)
 
 # get all the properties from the db
 # then using the prop id, locate all the associated stops for that prop id
@@ -146,7 +134,7 @@ def getStopPropsCombos(db=WATTS_DATA_DB_KEY,stopPropId=None,thresh=None):
     stopPropCombos = {}
 
     if stopPropId:
-        propList = findStopProps(db,stopPropId)
+        propList = getStopFromStopPropId(stopPropId)
     else:
         propList = list(tbl.find())
 
@@ -175,7 +163,6 @@ def computeStopData():
 
     for ml in masterList:
         addRow = True
-        #print ml
         if first is None:
             point = (stop_id, float(ml[2]),float(ml[3]))
             stats[TRUCK_ID_KEY] = ml[1]
@@ -294,15 +281,14 @@ def saveComputedStops(db=WATTS_DATA_DB_KEY):
         stopList.append(stop)
     saveStopsData(stopList,db, delete=True)
     saveStopsPropsData(stopPropList,db, delete=True)
-    notify("computed stops and properties")
 
-
-def getStopByDuration(drtn,truckId=None):
+# to be implemented
+#def getStopByDuration(drtn,truckId=None):
     # if truckId == None:
     #     return StopProperties.findItemList(TRUCK_ID_KEY, truckId, db)
     # return StopProperties.find({TRUCK_ID_KEY: truckId, DATE_NUM_KEY: dateNum}, db)
     #
-    print('x')
+    #print('x')
 
 def findDCs(db=WATTS_DATA_DB_KEY):
     stops = Stop.getItemList(db)
@@ -327,14 +313,6 @@ def findDCs(db=WATTS_DATA_DB_KEY):
                         print getLineForItems(ls).rstrip('\n')
                         retd[st.id] = [[p.id, p.lat, p.lon, p.duration, p.time, p.truckId, p.dateNum]]
 
-
-    # go through the d, print the following
-    # stopid, lat, lon, truckid, duration, time, datenum
-    #
-    # for rtd in retd:
-    #     ls = retd[rtd]
-    #     for l in ls:
-    #         print l
 
     print len(retd)
 
@@ -413,8 +391,7 @@ def getTruckList(db=WATTS_DATA_DB_KEY):
 
     return tdict
 
-def getStopsFromDate(dateNum, db=WATTS_DATA_DB_KEY):
-    print 'x'
+#def getStopsFromDate(dateNum, db=WATTS_DATA_DB_KEY):
 
 def getTruckScheduleForDay(truckId, dateNum):
     dict = getStopsFromTruckDate(truckId,dateNum)

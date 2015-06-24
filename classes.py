@@ -23,171 +23,11 @@ class Point:
     def __repr__(self):
         return str(self.getItem())
 
-
-class Path:
-    def __init__(self, edge, input, prob):
-        self.edges = [edge]
-        self.results = {}
-        self.results[input.time] = edge
-        self.prob = prob
-
-    def __str__(self):
-        return str({ 'prob' : self.prob, 'path' : self.results })
-
-    def __repr__(self):
-        return str({ 'prob' : self.prob, 'path' : self.results })
-
-    def add(self, edge, input, prob):
-        self.edges.append(edge)
-        self.results[input.time] = edge
-        self.prob = prob
-
-    def getEdge(self, time):
-        return self.results[time]
-
-class Edge(DBItem):
-    tblKey = EDGES_KEY
-
-    __slots__ = [ID_KEY, COST_KEY, START_NODE_KEY, START_LAT_KEY, START_LON_KEY,
-                 START_POINT_KEY, END_NODE_KEY, END_LAT_KEY, END_LON_KEY, END_POINT_KEY]
-
-    # def __repr__(self):
-    #     return "Edge~" + str(self.id)
-
-    def __init__(self, item, db):
-        DBItem.__init__(self, item, db)
-
-        if isNotEmpty(item):
-            self.id = item[ID_KEY]
-            self.cost = getIfKey(item, COST_KEY)
-            self.startNodeId = item[START_NODE_KEY]
-            self.endNodeId = item[END_NODE_KEY]
-            self.startPoint = Point(item[START_LAT_KEY], item[START_LON_KEY])
-            self.endPoint = Point(item[END_LAT_KEY], item[END_LON_KEY])
-
-    def save(self):
-        self.item[ID_KEY] = self.id
-        self.item[COST_KEY] = self.cost
-        self.item[START_NODE_KEY] = self.startNodeId
-        self.item[END_NODE_KEY] = self.endNodeId
-        super(Edge, self).save(Edge.tblKey)
-
-    @classmethod
-    def getGraph(cls, db):
-        tbl = getTbl(db, cls.tblKey)
-        # items = tbl.find(sort=[( '$natural', 1 )] )
-
-        items = getTime(tbl.find, "got items")
-        graph = {}
-
-        for item in items:
-            edge = Edge(item, db)
-            addIfKey(graph, edge.startNodeId, edge)
-
-        return graph
-
-        # return graph
-
-class MiniEdge(DBItem):
-    tblKey = MINI_EDGES_KEY
-
-    __slots__ = [ID_KEY, EDGE_ID_KEY, START_NODE_KEY, LENGTH_KEY, END_LON_KEY,
-                 END_NODE_KEY, START_LAT_KEY, START_LON_KEY, END_LAT_KEY,
-                 START_POINT_KEY, END_POINT_KEY, REMAINING_KEY]
-
-    def __init__(self, item, db):
-        DBItem.__init__(self, item, db)
-        if isNotEmpty(item):
-            self.id = item[ID_KEY]
-            self.startNodeId = item[START_NODE_KEY]
-            self.endNodeId = item[END_NODE_KEY]
-            self.startLat = item[START_LAT_KEY]
-            self.startLon = item[START_LON_KEY]
-            self.endLat = item[END_LAT_KEY]
-            self.endLon = item[END_LON_KEY]
-            self.length = item[LENGTH_KEY]
-            self.edgeId = item[EDGE_ID_KEY]
-            self.remaining = getIfKey(item, REMAINING_KEY)
-            self.startPoint = Point(item[START_LAT_KEY], item[START_LON_KEY])
-            self.endPoint = Point(item[END_LAT_KEY], item[END_LON_KEY])
-
-    def save(self):
-        self.item[ID_KEY] = self.id
-        self.item[START_NODE_KEY] = self.startNodeId
-        self.item[END_NODE_KEY] = self.endNodeId
-        self.item[START_LAT_KEY] = self.startLat
-        self.item[START_LON_KEY] = self.startLon
-        self.item[END_LAT_KEY] = self.endLat
-        self.item[END_LON_KEY] = self.endLon
-        self.item[LENGTH_KEY] = self.length
-        self.item[EDGE_ID_KEY] = self.edgeId
-        super(MiniEdge, self).save(MiniEdge.tblKey)
-
-    @classmethod
-    def getEdgeNetwork(cls, db):
-        tbl = getTbl(db, cls.tblKey)
-        items = tbl.find()
-        network = {}
-
-        for item in items:
-            miniEdge = MiniEdge(item, db)
-            addIfKey(network, miniEdge.edgeId, miniEdge)
-
-        return network
-
-
-class Node(DBItem):
-    tblKey = NODES_KEY
-
-    __slots__ = [ID_KEY, LAT_KEY, LON_KEY, FOR_NEIGHBORS_KEY, BACK_NEIGHBORS_KEY,
-                 PRIORITY_KEY, MARKED_KEY, VISITED_KEY, HEAP_ID_KEY, DISTANCE_KEY, POINT_KEY]
-
-    def __init__(self, item, db):
-        DBItem.__init__(self, item, db)
-
-        if isNotEmpty(item):
-            self.id = item[ID_KEY]
-            self.lat = item[LAT_KEY]
-            self.lon = item[LON_KEY]
-            self.forNeighbors = getIfKey(item, FOR_NEIGHBORS_KEY, [])
-            self.backNeighbors = getIfKey(item, BACK_NEIGHBORS_KEY, [])
-            self.point = Point(self.lat, self.lon)
-
-        self.marked = False
-        self.visited = False
-
-    def save(self):
-        self.item[ID_KEY] = self.id
-        self.item[LAT_KEY] = self.lat
-        self.item[LON_KEY] = self.lon
-        self.item[FOR_NEIGHBORS_KEY] = self.forNeighbors
-        self.item[BACK_NEIGHBORS_KEY] = self.backNeighbors
-        super(Node, self).save(Node.tblKey)
-
-    def getLatLon(self):
-        return (self.lat, self.lon)
-
-
-class TestEdge(Edge):
-    tblKey = TEST_EDGES_KEY
-
-    __slots__ = [DESCRIPTION_KEY]
-
-class TestNode(Node):
-    tblKey = TEST_NODES_KEY
-
-    __slots__ = [STATE_KEY, DESCRIPTION_KEY]
-
-    def __repr__(self):
-        """Convert to string for printing."""
-        return "Node(%s, %s, '%s', '%s')" % (self.lon, self.lat,
-                                             self.state, self.description)
-
 class TruckPoint(DBItem):
     tblKey = TRUCK_POINTS_KEY
 
     __slots__ = [TRUCK_ID_KEY, TIME_KEY, VELOCITY_KEY, LAT_KEY, LON_KEY, DATE_NUM_KEY, POINT_KEY, DRIVER_KEY,
-                 TEMPERATURE_KEY, DIRECTION_KEY, PATENT_KEY, CAPACITY_KEY, COMMUNE_KEY]
+                 TEMPERATURE_KEY, DIRECTION_KEY, PATENT_KEY, CAPACITY_KEY, COMMUNE_KEY, TIMESTAMP_KEY]
 
 
     def __init__(self, item, db):
@@ -202,7 +42,23 @@ class TruckPoint(DBItem):
         self.direction = item[DIRECTION_KEY]
         self.patent = item[PATENT_KEY]
         self.commune = item[COMMUNE_KEY]
+        self.timestamp = item[TIMESTAMP_KEY]
         self.point = Point(self.lat, self.lon)
+
+    def save(self):
+        self.item[TRUCK_ID_KEY] = self.truckId
+        self.item[TIME_KEY] = self.time
+        self.item[VELOCITY_KEY] = self.velocity
+        self.item[LAT_KEY] = self.lat
+        self.item[LON_KEY] = self.lon
+        self.item[DATE_NUM_KEY] = self.dateNum
+        self.item[TEMPERATURE_KEY] = self.temperature
+        self.item[DIRECTION_KEY] = self.direction
+        self.item[COMMUNE_KEY] = self.commune
+        self.item[PATENT_KEY] = self.patent
+        self.item[POINT_KEY] = self.point
+        self.item[TIMESTAMP_KEY] = self.timestamp
+        super(TruckPoint, self).save(TruckPoint.tblKey)
 
 
 def getLatLon(self):
@@ -219,34 +75,31 @@ def save(self):
     self.item[DIRECTION_KEY] = self.direction
     self.item[PATENT_KEY] = self.patent
     self.item[COMMUNE_KEY] = self.commune
+    self.item[TIMESTAMP_KEY] = self.timestamp
     super(Point, self).save(Point.tblKey)
 
 class Truck(DBItem):
     tblKey = TRUCKS_KEY
 
-    __slots__ = [ID_KEY, TIME_KEY, VELOCITY_KEY, DATE_NUM_KEY, DRIVER_KEY,
-                 PATENT_KEY, CAPACITY_KEY]
+    __slots__ = [ID_KEY, TIME_KEY, VELOCITY_KEY, DATE_NUM_KEY,
+                 PATENT_KEY, TIMESTAMP_KEY]
 
     def __init__(self, item, db):
         DBItem.__init__(self, item, db)
-        print 'in constructor'
-        print item
         self.id = item[ID_KEY]
         self.time = item[TIME_KEY]
         self.velocity = item[VELOCITY_KEY]
         self.dateNum = item[DATE_NUM_KEY]
-        self.driver  = item[DRIVER_KEY]
-        self.capacity = item[CAPACITY_KEY]
         self.patent = item[PATENT_KEY]
+        self.timestamp = item[TIMESTAMP_KEY]
 
     def save(self):
         self.item[ID_KEY] = self.id
         self.item[TIME_KEY] = self.time
         self.item[VELOCITY_KEY] = self.velocity
         self.item[DATE_NUM_KEY] = self.dateNum
-        self.item[DRIVER_KEY] = self.driver
         self.item[PATENT_KEY] = self.patent
-        self.item[CAPACITY_KEY] = self.capacity
+        self.item[TIMESTAMP_KEY] = self.timestamp
         super(Truck, self).save(Truck.tblKey)
 
 class TruckDates(DBItem):
@@ -286,7 +139,8 @@ class Stop(DBItem):
 class StopProperties(DBItem):
     tblKey = STOP_PROPS_KEY
 
-    __slots__ = [ID_KEY, STOP_PROP_ID_KEY, DATE_NUM_KEY, LAT_KEY, LON_KEY, DURATION_KEY, TIME_KEY, RADIUS_KEY, TRUCK_ID_KEY]
+    __slots__ = [ID_KEY, STOP_PROP_ID_KEY, DATE_NUM_KEY, LAT_KEY, LON_KEY, DURATION_KEY,
+                 TIME_KEY, RADIUS_KEY, TRUCK_ID_KEY]
 
     def __init__(self, item, db):
         DBItem.__init__(self, item, db)
@@ -311,42 +165,6 @@ class StopProperties(DBItem):
         self.item[TRUCK_ID_KEY] = self.truckId
         self.item[STOP_PROP_ID_KEY] = self.stopPropId
         super(StopProperties, self).save(StopProperties.tblKey)
-
-class MiniNode(DBItem):
-    tblKey = MINI_NODES_KEY
-
-    __slots__ = [ID_KEY, LAT_KEY, LON_KEY, EDGE_ID_KEY, CELL_ID_KEY]
-
-    def __init__(self, item, db):
-        DBItem.__init__(self, item, db)
-        self.id = item[ID_KEY]
-        self.lat = item[LAT_KEY]
-        self.lon = item[LON_KEY]
-        self.edgeId = item[EDGE_ID_KEY]
-        self.cellId = getIfKey(item, CELL_ID_KEY)
-
-    def save(self):
-        self.item[ID_KEY] = self.id
-        self.item[LAT_KEY] = self.lat
-        self.item[LON_KEY] = self.lon
-        self.item[EDGE_ID_KEY] = self.edgeId
-        self.item[CELL_ID_KEY] = self.cellId
-        super(MiniNode, self).save(MiniNode.tblKey)
-
-class Cell(DBItem):
-    tblKey = CELLS_KEY
-
-    __slots__ = [ID_KEY, MINI_EDGES_KEY]
-
-    def __init__(self, item, db):
-        DBItem.__init__(self, item, db)
-        self.id = item[ID_KEY]
-        self.miniEdges = item[MINI_EDGES_KEY]
-
-    def save(self):
-        self.item[ID_KEY] = self.id
-        self.item[MINI_EDGES_KEY] = self.miniEdges
-        super(Cell, self).save(Cell.tblKey)
 
 class Input(DBItem):
     tblKey = INPUT_KEY

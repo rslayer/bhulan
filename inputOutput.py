@@ -32,8 +32,9 @@ def saveStopsToFile(datenum):
         for s in stops:
             if inSantiago(s):
                 tm = s.time.split(":")
-                drt = s.duration.split(":")
-                dt = datetime.datetime(year=2014, month=9, day=1,hour=int(tm[0]), minute=int(tm[1]), second=int(tm[2]))
+                ts = getDateByDatenum(datenum).split('-')
+                dt = datetime.datetime(year=int(ts[0]), month=int(ts[1]), day=int(ts[2]),
+                                       hour=int(tm[0]), minute=int(tm[1]), second=int(tm[2]))
                 date = dt.strftime("%Y-%m-%d %H:%M:%S")
                 ls = [s.id, date, s.lat, s.lon,s.duration, dt.isoformat(), s.truckId]
                 line = getLineForItems(ls)

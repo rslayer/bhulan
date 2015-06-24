@@ -57,14 +57,12 @@ if __name__ == '__main__':
     #dataPurge(db)
     # trucks()
     # compute()
-    # stops()
-    #setupAll()
-    i = 232
-    while i < 238:
-        saveStopsToFile(i)
-        i+=1
-    #saveStopsToFile(231)
-    # saveStopsToFile(220)
+    #stops()
+    setupAll()
+    # i = 269
+    # while i < 280:
+    #     saveStopsToFile(i)
+    #     i+=1
 
     if len(sys.argv) == 2:
         if sys.argv[1] == "all":

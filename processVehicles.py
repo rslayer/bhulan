@@ -216,7 +216,6 @@ def findStops(truckId, dateNum, db=WATTS_DATA_DB_KEY, constraint=None):
             stop[POINT_KEY] = centroids[i]
             stop[RADIUS_KEY] = diameters[i] / 2
             stop[START_STOP_KEY] = startStops[i]
-
             filtered.append(stop)
 
     return filtered
@@ -232,7 +231,7 @@ def findStopsAll(db=WATTS_DATA_DB_KEY, constraint=None, trucks=None,datenums=Non
 
     for dns in datenums:
         for truckId in trucks:
-            print 'processing: '+str(truckId)+' for date: '+str(dns)
+            #print 'processing: '+str(truckId)+' for date: '+str(dns)
             stops = findStops(truckId, dns, db, constraint)
             for s in stops:
                 dat = [dns,truckId, s['point'].lat, s['point'].lon, s['radius'],s['startStop'][0],s['startStop'][1]]
@@ -246,23 +245,24 @@ def findStopsAll(db=WATTS_DATA_DB_KEY, constraint=None, trucks=None,datenums=Non
 
 def initCompute(db=WATTS_DATA_DB_KEY):
     computeTruckDateCombos(db)
-    notify("computed truck dates")
     computeRouteCenters(db)
-    COMPUTED = Computed()
+    #COMPUTED = Computed()
 
 
-def createMongoItem(code, patent, timestamp, lat, lon, direction, commune, velocity, temperature):
+def createMongoItem(code, patent, ts, lat, lon, direction, commune, velocity, temperature):
     truck = {}
     truck[TRUCK_ID_KEY] = code
-    truck[TIME_KEY] = str(getDateTime(timestamp).time())
+    truck[TIME_KEY] = str(getDateTime(ts).time())
     truck[VELOCITY_KEY] = velocity
     truck[LAT_KEY] = lat
     truck[LON_KEY] = lon
-    truck[DATE_NUM_KEY] = getDateNum(timestamp)
+    truck[DATE_NUM_KEY] = getDateNum(ts)
     truck[PATENT_KEY] = patent
     truck[DIRECTION_KEY] = direction #has to be formatted
     truck[TEMPERATURE_KEY] = temperature
     truck[COMMUNE_KEY] = commune
+    truck[TIMESTAMP_KEY] = datetime.datetime(year=ts[0], month=ts[1], day=ts[2],hour=ts[3],
+                                             minute=ts[4], second=ts[5]).isoformat()
 
     return truck
 ##
@@ -285,7 +285,6 @@ def readData(filename, db):
         except TypeError:
             timestamp = xlrd.xldate_as_tuple(float(getExcelDate(day))+hour,0)
 
-        #throwException('testing this out')
         item = createMongoItem(code, patent, timestamp, lat, lon, direction, commune, velocity, temperature)
         items.append(item)
         curr_row += 1
