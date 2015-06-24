@@ -26,10 +26,10 @@ An opensource python library for GPS data processing
 refer to the sample file in the sampledata folder. 
 
 # internal date formats - datenum
-We use a pseudo indicator for date called DateNum which is calculated as below:
-Datenum = month_num * 31 + day_of_month
-A month of june will have 6 as the month_num. day_of_month will be 30 for a date of June 30
-So June 30th will have a datenum of  31*6+30 or 216 
+A pseudo indicator for date called DateNum is used to make processing of dates easy. 
+DateNum is calculated as below:
+    * Datenum = month_num * 31 + day_of_month
+For June 30th, the month_num will be 6 while day_of_month will be 30. Therefore the datenum for June 30th will be 216.
 
 # key properties
 * getTruckPoints - returns all the truck points for a given truck (truckId). It will return the points for that day if date is proved (datenum)

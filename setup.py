@@ -58,11 +58,11 @@ if __name__ == '__main__':
     # trucks()
     # compute()
     #stops()
-    #setupAll()
-    i = 218
-    while i < 221:
-        saveStopsToFile(i)
-        i+=1
+    print setupAll()
+    # i = 218
+    # while i < 221:
+    #     saveStopsToFile(i)
+    #     i+=1
 
     #saveStopsToFile(216)
 
