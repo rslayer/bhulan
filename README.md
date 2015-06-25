@@ -33,12 +33,12 @@ DateNum is calculated as below:
 For June 30th, the month_num will be 6 while day_of_month will be 30. Therefore the datenum for June 30th will be 216.
 
 # key properties
-> getTruckPoints - returns all the truck points for a given truck (truckId). It will return the points for that day if date is proved (datenum)
-> getStopsFromTruckDate – returns all stops for that truck and date
-> getStopPropsFromTruckDate – returns all stop properties for that truck and date
-> getStopStatistics – returns key stats for stops. Can return for specific truck and date.
-> getTruckScheduleForDay – returns a truck schedule for a given day – schedule is the order of stops for that day.
-> findDCs – returns the estimated location of a Distribution Center based on the stop data
+* getTruckPoints - returns all the truck points for a given truck (truckId). It will return the points for that day if date is proved (datenum)
+* getStopsFromTruckDate – returns all stops for that truck and date
+* getStopPropsFromTruckDate – returns all stop properties for that truck and date
+* getStopStatistics – returns key stats for stops. Can return for specific truck and date.
+* getTruckScheduleForDay – returns a truck schedule for a given day – schedule is the order of stops for that day.
+* findDCs – returns the estimated location of a Distribution Center based on the stop data
 
 # stop and stop properties
 * A Stop is the 20 meter geographical radius where we have observed multiple gps points from a truck for greater than 10 minutes. 
