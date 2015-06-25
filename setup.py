@@ -57,10 +57,10 @@ if __name__ == '__main__':
     #dataPurge(db)
     # trucks()
     # compute()
-    #stops()
-    print setupAll()
-    # i = 218
-    # while i < 221:
+    # stops()
+    setupAll()
+    # i = 238
+    # while i < 241:
     #     saveStopsToFile(i)
     #     i+=1
 
