@@ -13,7 +13,7 @@ def sendtoCartodb(fileloc):
 def saveStopPropsDataToFile(db=WATTS_DATA_DB_KEY):
     stops = StopProperties.getItems(db)
 
-    with open('/Users/alikamil/Desktop/stoppropssall.csv','w') as wf:
+    with open(GPS_FILE_DIRECTORY+"stopsall.csv",'w') as wf:
         for i in stops.keys():
             prop = stops[i]
             items = [prop.id, prop.time]
@@ -24,7 +24,7 @@ def saveStopsToFile(datenum):
     filename = GPS_FILE_DIRECTORY+"santi_truckstops_"+str(datenum)+".csv"
     wf = open(filename,'w')
     trucklist = getTruckList().keys()
-    wf.write("id,datenum,lat,lng,duration,time, truckid\n")
+    wf.write("id,lat,lng,duration,time, truckid\n")
     ts = getDateByDatenum(datenum).split('-')
 
     for t in trucklist:
@@ -35,8 +35,7 @@ def saveStopsToFile(datenum):
                 tm = s.time.split(":")
                 dt = datetime.datetime(year=int(ts[0]), month=int(ts[1]), day=int(ts[2]),
                                        hour=int(tm[0]), minute=int(tm[1]), second=int(tm[2]))
-                date = dt.isoformat()#.strftime("%Y-%m-%d %H:%M:%S")
-                ls = [s.id, date, s.lat, s.lon,s.duration, dt.isoformat(), s.truckId]
+                ls = [s.id, s.lat, s.lon,s.duration, dt.isoformat(), s.truckId]
                 line = getLineForItems(ls)
                 wf.write(line)
 

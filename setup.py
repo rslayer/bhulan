@@ -54,17 +54,7 @@ def dataPurge(db):
     client.drop_database(db)
 
 if __name__ == '__main__':
-    #dataPurge(db)
-    # trucks()
-    # compute()
-    # stops()
     setupAll()
-    # i = 238
-    # while i < 241:
-    #     saveStopsToFile(i)
-    #     i+=1
-
-    #saveStopsToFile(216)
 
     if len(sys.argv) == 2:
         if sys.argv[1] == "all":
