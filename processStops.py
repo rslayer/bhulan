@@ -1,6 +1,6 @@
 import datetime
 from init import *
-from util import (kilDist,notify,toIso)
+from util import (kilDist)
 from processVehicles import findStopsAll
 from classes import *
 
@@ -35,6 +35,7 @@ def getDuration(t1, t2):
     ta = datetime.timedelta(hours=t1.hour,minutes=t1.minute)
     tb = datetime.timedelta(hours=t2.hour,minutes=t2.minute)
     a = tb - ta
+    print a
     ret = datetime.time(hour=(a.seconds/3600), minute=(a.seconds/60)%60)
     return ret
 
@@ -406,7 +407,7 @@ def getTruckScheduleForDay(truckId, dateNum):
 
 def getDistanceTraveled(truckId, datenum,db=WATTS_DATA_DB_KEY,):
     ts = getTruckPoints(truckId,datenum,db)
-    dist = 0
+    dist,tme = 0,0
     totalDistance = 0
     first = True
     for t in ts:

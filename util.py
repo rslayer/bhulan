@@ -225,3 +225,15 @@ class negative_infinity:
         return -1
 
 ################ Begin Assorted Functions ###############
+
+def getLineForItems(items):
+    length = len(items)
+    line = ""
+    for i in range(length):
+        item = items[i]
+        line += str(item)
+        if i != length - 1:
+            line += ","
+        else:
+            line += "\n"
+    return line
