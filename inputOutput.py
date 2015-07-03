@@ -58,3 +58,4 @@ def saveTruckDateCombosToFile(truckId,datenum, db=WATTS_DATA_DB_KEY):
             wf.write(line)
 
     wf.close()
+

@@ -57,7 +57,7 @@ def getTrucks(db):
 def getTruckPointsByDateNum(db, dateNum):
     return TruckPoint.find({DATE_NUM_KEY: dateNum}, db)
 
-def getTruckPoints(truckId, db, dateNum=None):
+def getTruckPoints(truckId, dateNum=None, db=WATTS_DATA_DB_KEY):
     if dateNum == None:
         return TruckPoint.findItemList(TRUCK_ID_KEY, truckId, db)
     return TruckPoint.find({TRUCK_ID_KEY: truckId, DATE_NUM_KEY: dateNum}, db)
@@ -403,3 +403,18 @@ def getTruckScheduleForDay(truckId, dateNum):
         schd[vl.time] = list([vl.lat, vl.lon, vl.duration])
 
     return schd
+
+def getDistanceTraveled(truckId, datenum,db=WATTS_DATA_DB_KEY,):
+    ts = getTruckPoints(truckId,datenum,db)
+    dist = 0
+    totalDistance = 0
+    first = True
+    for t in ts:
+        if first:
+            dist = t.point
+            first = False
+            continue
+        totalDistance += kilDist(dist,t.point)
+        dist = t.point
+
+    return totalDistance
