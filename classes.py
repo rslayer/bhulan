@@ -1,5 +1,5 @@
 from mongo import *
-from util import getMeters, addIfKey, getTime
+from util import getMeters
 
 def isNotEmpty(item):
     return len(item)

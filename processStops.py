@@ -1,6 +1,6 @@
 import datetime
 from init import *
-from util import (kilDist)
+from util import (kilDist,getTimeDeltas)
 from processVehicles import findStopsAll
 from classes import *
 
@@ -35,9 +35,11 @@ def getDuration(t1, t2):
     ta = datetime.timedelta(hours=t1.hour,minutes=t1.minute)
     tb = datetime.timedelta(hours=t2.hour,minutes=t2.minute)
     a = tb - ta
-    print a
-    ret = datetime.time(hour=(a.seconds/3600), minute=(a.seconds/60)%60)
-    return ret
+    return (float(a.total_seconds()/60))
+
+    # 7/4/2015 - returning duration as total minutes instead of time value
+    # ret = datetime.time(hour=(a.seconds/3600), minute=(a.seconds/60)%60)
+    # return ret
 
 def getTime(h,m):
     #return (MIN_NUM*h+m)
@@ -284,39 +286,28 @@ def saveComputedStops(db=WATTS_DATA_DB_KEY):
     saveStopsPropsData(stopPropList,db, delete=True)
     return stopPropList
 
-# to be implemented
-#def getStopByDuration(drtn,truckId=None):
-    # if truckId == None:
-    #     return StopProperties.findItemList(TRUCK_ID_KEY, truckId, db)
-    # return StopProperties.find({TRUCK_ID_KEY: truckId, DATE_NUM_KEY: dateNum}, db)
-    #
-    #print('x')
-
-def findDCs(db=WATTS_DATA_DB_KEY):
+# returns stops with stop duration greater than the specified time in minutes
+# input - drtn - minutes of duration
+def getStopByDuration(drtn, db=WATTS_DATA_DB_KEY):
     stops = Stop.getItemList(db)
-
     retd = {}
-    print "stopid, lat, lon, truckid, duration, time, datenum"
     for st in stops:
         props = getStopPropsFromStopId(st.id)
-        for pix in props:
-            p = props[pix]
-            dur = p.duration.split(":")
+        for prp in props:
+            p = props[prp]
             if retd.has_key(st.id):
-                if int(dur[0][1]) > DC_HOURS:
-                    if inSantiago(p):
-                        ls = [st.id, p.lat, p.lon, p.truckId,p.duration, p.time, p.dateNum]
-                        #print getLineForItems(ls).rstrip("\n")
-                        retd[st.id].append([p.id, p.lat, p.lon, p.duration, p.time, p.truckId, p.dateNum])
+                if (float(p.duration)/60) > drtn:
+                    ls = [st.id, p.lat, p.lon, p.truckId,p.duration, p.time, p.dateNum]
+                    retd[st.id].append([p.id, p.lat, p.lon, p.duration, p.time, p.truckId, p.dateNum])
             else:
-                if int(dur[0][1]) > DC_HOURS:
+                if (float(p.duration)/60) > drtn:
                     if inSantiago(p):
                         ls = [st.id, p.lat, p.lon, p.truckId,p.duration, p.time, p.dateNum]
-                        print getLineForItems(ls).rstrip('\n')
                         retd[st.id] = [[p.id, p.lat, p.lon, p.duration, p.time, p.truckId, p.dateNum]]
+    return retd
 
-
-    print len(retd)
+def findPotentialDCs(db=WATTS_DATA_DB_KEY):
+    return getStopByDuration(DC_HOURS)
 
 def inSantiago(point):
     santi = Point(SANTI_LAT,SANTI_LON)
@@ -365,19 +356,17 @@ def windowhelper(timewindow, time, i):
 def getTimeWindows(db=WATTS_DATA_DB_KEY):
     #counted as 0-1, 1-2, 1-3...23-0
     timewindow = {}
-    stops = Stop.getItems(db)
-    cnt = 0
+    # stops = Stop.getItems(db)
+    # cnt = 0
     # looking for window by truck and date
     #qry = ({TRUCK_ID_KEY:"VG-3837",DATE_NUM_KEY:314, STOP_PROP_ID_KEY:stopId})
 
     ls = StopProperties.getItems(db)
     for prop in ls:
         i = ls[prop]
-        hour = getTime(int((i.duration).split(":")[0]),int((i.duration).split(":")[1])).hour
-        #print time
+        hour = float(i.duration)/60
         if hour < 4:
             windowhelper(timewindow,hour, i)
-
 
     return timewindow
 
@@ -405,7 +394,7 @@ def getTruckScheduleForDay(truckId, dateNum):
 
     return schd
 
-def getDistanceTraveled(truckId, datenum,db=WATTS_DATA_DB_KEY,):
+def getTotalDistanceTraveled(truckId, datenum,db=WATTS_DATA_DB_KEY,):
     ts = getTruckPoints(truckId,datenum,db)
     dist,tme = 0,0
     totalDistance = 0
@@ -416,6 +405,32 @@ def getDistanceTraveled(truckId, datenum,db=WATTS_DATA_DB_KEY,):
             first = False
             continue
         totalDistance += kilDist(dist,t.point)
-        dist = t.point
 
+        dist = t.point
     return totalDistance
+
+def getTotalTimeOnRoad(truckId, datenum,db=WATTS_DATA_DB_KEY,):
+    ts = getTruckPoints(truckId,datenum,db)
+    dist,tme = 0,0
+    totalDistance = 0
+    totalTime = datetime.timedelta(hours=0,minutes=0,seconds=0)
+    first = True
+    for t in ts:
+        if first:
+            dist = t.point
+            tme = t.time
+            first = False
+            continue
+        curr = kilDist(dist,t.point)
+        totalDistance += curr
+
+        if curr > 0:
+            x = getTimeDeltas(t.time) - getTimeDeltas(tme)
+            totalTime = totalTime+x
+        dist = t.point
+        tme = t.time
+
+    return totalTime.total_seconds()/3600
+
+def getAverageSpeedByDatenum(truckId, datenum):
+    return getTotalDistanceTraveled(truckId,datenum)/getTotalTimeOnRoad(truckId,datenum)

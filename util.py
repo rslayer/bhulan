@@ -3,6 +3,7 @@ import xlrd
 import math
 from datetime import *
 import time
+
 HEAP_ID_KEY = "heapId"
 PRIORITY_KEY = "priority"
 
@@ -225,6 +226,11 @@ class negative_infinity:
         return -1
 
 ################ Begin Assorted Functions ###############
+
+def getTimeDeltas(time):
+    t = time.split(":")
+    t1 = timedelta(hours=int(t[0]),minutes=int(t[1]),seconds=int(t[2]))
+    return t1
 
 def getLineForItems(items):
     length = len(items)

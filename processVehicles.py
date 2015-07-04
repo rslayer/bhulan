@@ -3,8 +3,8 @@ import glob
 from computed import *
 import xlrd
 import datetime
-from util import (notify, throwException, kilDist, mileDist, getDate, getDateNum, getClockTime, getSeconds,
-                  getMinutes, getHours, getDateTime, getDateNumForChile, xldate_to_datetime, getExcelDate)
+from util import (kilDist, mileDist, getDateNum, getClockTime, getSeconds,
+                  getMinutes, getHours, getDateTime, getExcelDate)
 COMPUTED = None
 SAMPLE_RATE = 100
 MAX_DISTANCE = 5
