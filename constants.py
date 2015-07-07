@@ -124,6 +124,7 @@ DESCRIPTION_KEY = "description"
 STATE_KEY = "state"
 TEST_EDGES_KEY = "testEdges"
 TEST_NODES_KEY = "testNodes"
+ADDRESS_KEY = "address"
 
 STOPS_KEY = "stops"
 STOP_PROPS_KEY = "stopProps"

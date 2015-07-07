@@ -140,7 +140,7 @@ class StopProperties(DBItem):
     tblKey = STOP_PROPS_KEY
 
     __slots__ = [ID_KEY, STOP_PROP_ID_KEY, DATE_NUM_KEY, LAT_KEY, LON_KEY, DURATION_KEY,
-                 TIME_KEY, RADIUS_KEY, TRUCK_ID_KEY]
+                 TIME_KEY, RADIUS_KEY, TRUCK_ID_KEY, ADDRESS_KEY]
 
     def __init__(self, item, db):
         DBItem.__init__(self, item, db)
@@ -152,6 +152,7 @@ class StopProperties(DBItem):
         self.time = item[TIME_KEY]
         self.radius = item[RADIUS_KEY]
         self.truckId = item[TRUCK_ID_KEY]
+        self.address = item[ADDRESS_KEY]
         self.stopPropId = item[STOP_PROP_ID_KEY]
 
     def save(self):
@@ -163,6 +164,7 @@ class StopProperties(DBItem):
         self.item[TIME_KEY] = self.time
         self.item[RADIUS_KEY] = self.radius
         self.item[TRUCK_ID_KEY] = self.truckId
+        self.item[ADDRESS_KEY] = self.address
         self.item[STOP_PROP_ID_KEY] = self.stopPropId
         super(StopProperties, self).save(StopProperties.tblKey)
 

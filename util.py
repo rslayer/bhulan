@@ -3,6 +3,7 @@ import xlrd
 import math
 from datetime import *
 import time
+from geopy.geocoders import Nominatim
 
 HEAP_ID_KEY = "heapId"
 PRIORITY_KEY = "priority"
@@ -99,6 +100,14 @@ def getExcelDate(date):
     delta = dt - temp
     return float(delta.days) + (float(delta.seconds) / 86400)
 
+def revGeoCode(latitude, longitude):
+
+    geolocator = Nominatim()
+    coords = str(latitude)+","+str(longitude)
+
+    location = geolocator.reverse(coords,timeout=10)
+    return location.address
+
 ################ End Date Time Functions ################
 
 ################ Begin Distance Functions ################
@@ -165,8 +174,6 @@ def mileDist(point1, point2):
     return arc * 3960
 
 def kilDist(point1, point2):
-    # print point1.lat, point2.lat
-    # print "TESSTING"
     arc = 0
     try:
         arc = findArc(point1, point2)

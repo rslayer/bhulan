@@ -1,6 +1,6 @@
 import datetime
 from init import *
-from util import (kilDist,getTimeDeltas)
+from util import (kilDist,getTimeDeltas,revGeoCode)
 from processVehicles import findStopsAll
 from classes import *
 
@@ -92,6 +92,7 @@ def getStopPropsFromTruckDate(truckId, dateNum=None, db=WATTS_DATA_DB_KEY):
     return StopProperties.find({TRUCK_ID_KEY: truckId, DATE_NUM_KEY: dateNum}, db)
 
 def getStopsFromTruckDate(truckId, dateNum=None, db=WATTS_DATA_DB_KEY):
+
     stops = {}
     if dateNum == None:
         props = StopProperties.findItemList(TRUCK_ID_KEY, truckId, db)
@@ -272,6 +273,8 @@ def saveComputedStops(db=WATTS_DATA_DB_KEY):
             stopProp[TIME_KEY] = str(j[TIME_KEY])
             stopProp[STOP_PROP_ID_KEY] = i[0]
             stopProp[RADIUS_KEY] = j[RADIUS_KEY]
+            stopProp[ADDRESS_KEY] = revGeoCode(j[LAT_KEY],j[LON_KEY])
+
             stopPropList.append(stopProp)
             cluster.append(Point(stopProp[LAT_KEY],stopProp[LON_KEY]))
             propID+=1
@@ -332,6 +335,7 @@ def getStopStatistics(truckId=None, dateNum=None):
         print 'CENTROID LON: ' + str(singStop.lon)
         print 'LAT: ' + str(s.lat)
         print 'LON: ' + str(s.lon)
+        print 'ADDRESS: '+ s.address
         print 'TRUCK ID: ' + s.truckId
         print 'DATENUM: ' + str(s.dateNum)
         print 'TIME: ' + s.time
@@ -381,8 +385,6 @@ def getTruckList(db=WATTS_DATA_DB_KEY):
             tdict[t.truckId] = 1
 
     return tdict
-
-#def getStopsFromDate(dateNum, db=WATTS_DATA_DB_KEY):
 
 def getTruckScheduleForDay(truckId, dateNum):
     dict = getStopsFromTruckDate(truckId,dateNum)

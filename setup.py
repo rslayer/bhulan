@@ -54,7 +54,7 @@ def dataPurge(db):
     client.drop_database(db)
 
 if __name__ == '__main__':
-
+    dataPurge(db)
     setupAll()
 
     if len(sys.argv) == 2:
