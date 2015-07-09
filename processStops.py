@@ -1,7 +1,7 @@
 import datetime
 
 from init import *
-from util import (kilDist,getTimeDeltas,revGeoCode)
+from util import (kilDist, getTimeDeltas, revGeoCode)
 from processVehicles import findStopsAll
 from classes import *
 
@@ -29,23 +29,26 @@ def getLineForItems(items):
             line += "\n"
     return line
 
+
 def getDateByDatenum(datenum):
-    return (((getTruckPointsByDateNum(WATTS_DATA_DB_KEY,datenum))[0].timestamp).split('T')[0])
+    return (((getTruckPointsByDateNum(WATTS_DATA_DB_KEY, datenum))[0].timestamp).split('T')[0])
+
 
 def getDuration(t1, t2):
-    #print t2-t1
-    ta = datetime.timedelta(hours=t1.hour,minutes=t1.minute)
-    tb = datetime.timedelta(hours=t2.hour,minutes=t2.minute)
+    # print t2-t1
+    ta = datetime.timedelta(hours=t1.hour, minutes=t1.minute)
+    tb = datetime.timedelta(hours=t2.hour, minutes=t2.minute)
     a = tb - ta
-    return (float(a.total_seconds()/60))
+    return (float(a.total_seconds() / 60))
 
     # 7/4/2015 - returning duration as total minutes instead of time value
     # ret = datetime.time(hour=(a.seconds/3600), minute=(a.seconds/60)%60)
     # return ret
 
-def getTime(h,m):
-    #return (MIN_NUM*h+m)
-    return datetime.time(h,m)
+
+def getTime(h, m):
+    # return (MIN_NUM*h+m)
+    return datetime.time(h, m)
 
 
 def getCentroid(cluster):
@@ -55,34 +58,42 @@ def getCentroid(cluster):
 
     return Point(lat, lon)
 
+
 def getTrucks(db):
     tbl = TruckPoint.getTbl(db)
     return tbl.distinct(TRUCK_ID_KEY)
 
+
 def getTruckPointsByDateNum(db, dateNum):
     return TruckPoint.find({DATE_NUM_KEY: dateNum}, db)
+
 
 def getTruckPoints(truckId, dateNum=None, db=WATTS_DATA_DB_KEY):
     if dateNum == None:
         return TruckPoint.findItemList(TRUCK_ID_KEY, truckId, db)
     return TruckPoint.find({TRUCK_ID_KEY: truckId, DATE_NUM_KEY: dateNum}, db)
 
+
 def getStops(db):
     tbl = Stop.getTbl(db)
     return tbl.distinct(ID_KEY)
+
 
 def getStopProperties(db):
     tbl = StopProperties.getTbl(db)
     return tbl.distinct(STOP_PROP_ID_KEY)
 
+
 def saveStopsData(items, db, delete=False):
-    Stop.saveItems(items,db,delete)
+    Stop.saveItems(items, db, delete)
+
 
 def saveStopsPropsData(items, db, delete=False):
-    StopProperties.saveItems(items,db, delete)
+    StopProperties.saveItems(items, db, delete)
+
 
 # def deleteStopsDb(db):
-#     getStopsDb(client).remove()
+# getStopsDb(client).remove()
 #
 # def deleteStopsPropsDb(db):
 #     getStopsPropsDb(client).remove()
@@ -93,13 +104,13 @@ def getStopPropsFromTruckDate(truckId, dateNum=None, db=WATTS_DATA_DB_KEY):
         return StopProperties.findItemList(TRUCK_ID_KEY, truckId, db)
     return StopProperties.find({TRUCK_ID_KEY: truckId, DATE_NUM_KEY: dateNum}, db)
 
-def getStopsFromTruckDate(truckId, dateNum=None, db=WATTS_DATA_DB_KEY):
 
+def getStopsFromTruckDate(truckId, dateNum=None, db=WATTS_DATA_DB_KEY):
     stops = {}
     if dateNum == None:
         props = StopProperties.findItemList(TRUCK_ID_KEY, truckId, db)
         for s in props:
-            x = Stop.findItem(ID_KEY,s.stopPropId, db)
+            x = Stop.findItem(ID_KEY, s.stopPropId, db)
             if stops.has_key(x.id):
                 continue
             else:
@@ -108,7 +119,7 @@ def getStopsFromTruckDate(truckId, dateNum=None, db=WATTS_DATA_DB_KEY):
         props = StopProperties.find({TRUCK_ID_KEY: truckId, DATE_NUM_KEY: dateNum}, db)
         stops = {}
         for s in props:
-            x = Stop.findItem(ID_KEY,s.stopPropId, db)
+            x = Stop.findItem(ID_KEY, s.stopPropId, db)
             #print x.id,
             if stops.has_key(x.id):
                 #print ":x",
@@ -118,24 +129,27 @@ def getStopsFromTruckDate(truckId, dateNum=None, db=WATTS_DATA_DB_KEY):
                 stops[x.id] = s
 
     return stops
-        #return StopProperties.find({TRUCK_ID_KEY: truckId, DATE_NUM_KEY: dateNum}, db)
+    #return StopProperties.find({TRUCK_ID_KEY: truckId, DATE_NUM_KEY: dateNum}, db)
+
 
 def getStopFromStopPropId(stopPropId, db=WATTS_DATA_DB_KEY):
-    props = StopProperties.findItem(ID_KEY,stopPropId,db)
-    return Stop.findItem(ID_KEY,props.stopPropId,db)
+    props = StopProperties.findItem(ID_KEY, stopPropId, db)
+    return Stop.findItem(ID_KEY, props.stopPropId, db)
+
 
 def getStopPropsFromStopId(stopId, db=WATTS_DATA_DB_KEY):
-    return StopProperties.findItems(STOP_PROP_ID_KEY,stopId,db)
+    return StopProperties.findItems(STOP_PROP_ID_KEY, stopId, db)
+
 
 def getStopTruckDateCombos(db=WATTS_DATA_DB_KEY, truckId=None, dateNum=None, stopPropId=None):
+    return StopProperties.find({TRUCK_ID_KEY: truckId, DATE_NUM_KEY: dateNum, STOP_PROP_ID_KEY: stopPropId}, db)
 
-    return StopProperties.find({TRUCK_ID_KEY:truckId, DATE_NUM_KEY:dateNum, STOP_PROP_ID_KEY:stopPropId},db)
 
 # get all the properties from the db
 # then using the prop id, locate all the associated stops for that prop id
 # return a dictionary of propid,centroid with the value of the stops
 # intensive process, shot not be used
-def getStopPropsCombos(db=WATTS_DATA_DB_KEY,stopPropId=None,thresh=None):
+def getStopPropsCombos(db=WATTS_DATA_DB_KEY, stopPropId=None, thresh=None):
     tbl = StopProperties.getTbl(db)
     stopPropCombos = {}
 
@@ -145,8 +159,8 @@ def getStopPropsCombos(db=WATTS_DATA_DB_KEY,stopPropId=None,thresh=None):
         propList = list(tbl.find())
 
     for pl in propList:
-        tup = (pl[STOP_PROP_ID_KEY],pl[LAT_KEY],pl[LON_KEY])
-        propList = getStopTruckDateCombos(client,stopPropId=pl[ID_KEY])
+        tup = (pl[STOP_PROP_ID_KEY], pl[LAT_KEY], pl[LON_KEY])
+        propList = getStopTruckDateCombos(client, stopPropId=pl[ID_KEY])
         if len(propList) >= thresh:
             stopPropCombos[tup] = propList
 
@@ -170,13 +184,13 @@ def computeStopData():
     for ml in masterList:
         addRow = True
         if first is None:
-            point = (stop_id, float(ml[2]),float(ml[3]))
+            point = (stop_id, float(ml[2]), float(ml[3]))
             stats[TRUCK_ID_KEY] = ml[1]
             stats[DATE_NUM_KEY] = ml[0]
-            t1 = getTime(int(ml[5].split(":")[0]),int(ml[5].split(":")[1]))
-            t2 = getTime(int(ml[6].split(":")[0]),int(ml[6].split(":")[1]))
+            t1 = getTime(int(ml[5].split(":")[0]), int(ml[5].split(":")[1]))
+            t2 = getTime(int(ml[6].split(":")[0]), int(ml[6].split(":")[1]))
             stats[TIME_KEY] = t1
-            stats[DURATION_KEY] = getDuration(t1,t2)
+            stats[DURATION_KEY] = getDuration(t1, t2)
             stats[LAT_KEY] = point[1]
             stats[LON_KEY] = point[2]
             stats[RADIUS_KEY] = ml[4]
@@ -205,7 +219,7 @@ def computeStopData():
                 oldPoint[LAT_KEY] = i[1]
                 oldPoint[LON_KEY] = i[2]
 
-                if (kilDist(oldPoint,newPoint)) <= CONSTRAINT:
+                if (kilDist(oldPoint, newPoint)) <= CONSTRAINT:
                     #if yes, then it means they are the same stop.
                     #   add to the list under the stop entry without incrementing stop prop ID
                     #   add the truck id, time, duration, datenum, stop id, radius
@@ -214,11 +228,11 @@ def computeStopData():
                     stats[TRUCK_ID_KEY] = ml[1]
                     stats[DATE_NUM_KEY] = ml[0]
 
-                    t1 = getTime(int(ml[5].split(":")[0]),int(ml[5].split(":")[1]))
-                    t2 = getTime(int(ml[6].split(":")[0]),int(ml[6].split(":")[1]))
+                    t1 = getTime(int(ml[5].split(":")[0]), int(ml[5].split(":")[1]))
+                    t2 = getTime(int(ml[6].split(":")[0]), int(ml[6].split(":")[1]))
 
                     stats[TIME_KEY] = t1
-                    stats[DURATION_KEY] = getDuration(t1,t2)
+                    stats[DURATION_KEY] = getDuration(t1, t2)
                     stats[LAT_KEY] = newPoint[LAT_KEY]
                     stats[LON_KEY] = newPoint[LON_KEY]
                     stats[RADIUS_KEY] = ml[4]
@@ -232,16 +246,15 @@ def computeStopData():
             #   add a new entry with an id.
             #   add the truck id, datenum, stop time, and duration
             if addRow:
-
                 stop_id += 1
-                pt = (stop_id, float(ml[2]),float(ml[3]))
+                pt = (stop_id, float(ml[2]), float(ml[3]))
 
                 stats[TRUCK_ID_KEY] = ml[1]
                 stats[DATE_NUM_KEY] = ml[0]
-                t1 = getTime(int(ml[5].split(":")[0]),int(ml[5].split(":")[1]))
-                t2 = getTime(int(ml[6].split(":")[0]),int(ml[6].split(":")[1]))
+                t1 = getTime(int(ml[5].split(":")[0]), int(ml[5].split(":")[1]))
+                t2 = getTime(int(ml[6].split(":")[0]), int(ml[6].split(":")[1]))
                 stats[TIME_KEY] = t1
-                stats[DURATION_KEY] = getDuration(t1,t2)
+                stats[DURATION_KEY] = getDuration(t1, t2)
                 stats[LAT_KEY] = pt[1]
                 stats[LON_KEY] = pt[2]
                 stats[RADIUS_KEY] = ml[4]
@@ -252,6 +265,7 @@ def computeStopData():
 
     return stops
 
+
 def saveComputedStops(db=WATTS_DATA_DB_KEY):
     computedStopData = computeStopData()
 
@@ -261,7 +275,7 @@ def saveComputedStops(db=WATTS_DATA_DB_KEY):
 
     keys = computedStopData.keys()
     for i in keys:
-        cluster=[]
+        cluster = []
         stop = {}
         ls = computedStopData[i]
         for j in ls:
@@ -275,11 +289,11 @@ def saveComputedStops(db=WATTS_DATA_DB_KEY):
             stopProp[TIME_KEY] = str(j[TIME_KEY])
             stopProp[STOP_PROP_ID_KEY] = i[0]
             stopProp[RADIUS_KEY] = j[RADIUS_KEY]
-            stopProp[ADDRESS_KEY] = revGeoCode(j[LAT_KEY],j[LON_KEY])
+            stopProp[ADDRESS_KEY] = revGeoCode(j[LAT_KEY], j[LON_KEY])
 
             stopPropList.append(stopProp)
-            cluster.append(Point(stopProp[LAT_KEY],stopProp[LON_KEY]))
-            propID+=1
+            cluster.append(Point(stopProp[LAT_KEY], stopProp[LON_KEY]))
+            propID += 1
 
         centroid = getCentroid(cluster)
         stop[ID_KEY] = i[0]
@@ -287,9 +301,10 @@ def saveComputedStops(db=WATTS_DATA_DB_KEY):
         stop[LON_KEY] = centroid.lon
 
         stopList.append(stop)
-    saveStopsData(stopList,db, delete=True)
-    saveStopsPropsData(stopPropList,db, delete=True)
+    saveStopsData(stopList, db, delete=True)
+    saveStopsPropsData(stopPropList, db, delete=True)
     return stopPropList
+
 
 # returns stops with stop duration greater than the specified time in minutes
 # input - drtn - minutes of duration
@@ -301,33 +316,36 @@ def getStopByDuration(drtn, db=WATTS_DATA_DB_KEY):
         for prp in props:
             p = props[prp]
             if retd.has_key(st.id):
-                if (float(p.duration)/60) > drtn:
-                    ls = [st.id, p.lat, p.lon, p.truckId,p.duration, p.time, p.dateNum]
+                if (float(p.duration) / 60) > drtn:
+                    ls = [st.id, p.lat, p.lon, p.truckId, p.duration, p.time, p.dateNum]
                     retd[st.id].append([p.id, p.lat, p.lon, p.duration, p.time, p.truckId, p.dateNum])
             else:
-                if (float(p.duration)/60) > drtn:
+                if (float(p.duration) / 60) > drtn:
                     if inSantiago(p):
-                        ls = [st.id, p.lat, p.lon, p.truckId,p.duration, p.time, p.dateNum]
+                        ls = [st.id, p.lat, p.lon, p.truckId, p.duration, p.time, p.dateNum]
                         retd[st.id] = [[p.id, p.lat, p.lon, p.duration, p.time, p.truckId, p.dateNum]]
     return retd
+
 
 def findPotentialDCs(db=WATTS_DATA_DB_KEY):
     return getStopByDuration(DC_HOURS)
 
+
 def inSantiago(point):
-    santi = Point(SANTI_LAT,SANTI_LON)
+    santi = Point(SANTI_LAT, SANTI_LON)
     if kilDist(point, santi) < SANTIAGO_RADIUS:
         #print kilDist(point, santi)
         return True
     else:
         return False
 
-def getStopStatistics(truckId=None, dateNum=None):
-    stprops = getStopPropsFromTruckDate(truckId,dateNum)
-    stops = getStopsFromTruckDate(truckId,dateNum)
 
-    print "TOTAL STOP PROPS:",len(stprops)
-    print "TOTAL STOPs:",len(stops)
+def getStopStatistics(truckId=None, dateNum=None):
+    stprops = getStopPropsFromTruckDate(truckId, dateNum)
+    stops = getStopsFromTruckDate(truckId, dateNum)
+
+    print "TOTAL STOP PROPS:", len(stprops)
+    print "TOTAL STOPs:", len(stops)
     for s in stprops:
         singStop = getStopFromStopPropId(s.id)
         print '--- TRUCK DATA ---'
@@ -337,12 +355,13 @@ def getStopStatistics(truckId=None, dateNum=None):
         print 'CENTROID LON: ' + str(singStop.lon)
         print 'LAT: ' + str(s.lat)
         print 'LON: ' + str(s.lon)
-        print 'ADDRESS: '+ s.address
+        print 'ADDRESS: ' + s.address
         print 'TRUCK ID: ' + s.truckId
         print 'DATENUM: ' + str(s.dateNum)
         print 'TIME: ' + s.time
         print 'DURATION: ' + s.duration
-    return stprops,stops
+    return stprops, stops
+
 
 def windowhelper(timewindow, time, i):
     if timewindow.has_key(time):
@@ -350,6 +369,7 @@ def windowhelper(timewindow, time, i):
     else:
         timewindow[time] = []
         timewindow[time].append((i.stopPropId, i.lat, i.lon, i.truckId, i.dateNum, i.time, i.duration))
+
 
 # go through the stops
 # create a dictionary for each hour of day {1.2. 24}
@@ -370,9 +390,9 @@ def getTimeWindows(db=WATTS_DATA_DB_KEY):
     ls = StopProperties.getItems(db)
     for prop in ls:
         i = ls[prop]
-        hour = float(i.duration)/60
+        hour = float(i.duration) / 60
         if hour < 4:
-            windowhelper(timewindow,hour, i)
+            windowhelper(timewindow, hour, i)
 
     return timewindow
 
@@ -388,8 +408,9 @@ def getTruckList(db=WATTS_DATA_DB_KEY):
 
     return tdict
 
+
 def getTruckScheduleForDay(truckId, dateNum):
-    dict = getStopsFromTruckDate(truckId,dateNum)
+    dict = getStopsFromTruckDate(truckId, dateNum)
     schd = {}
 
     for d in dict:
@@ -398,9 +419,10 @@ def getTruckScheduleForDay(truckId, dateNum):
 
     return schd
 
-def getTotalDistanceTraveled(truckId, datenum,db=WATTS_DATA_DB_KEY,):
-    ts = getTruckPoints(truckId,datenum,db)
-    dist,tme = 0,0
+
+def getTotalDistanceTraveled(truckId, datenum, db=WATTS_DATA_DB_KEY, ):
+    ts = getTruckPoints(truckId, datenum, db)
+    dist, tme = 0, 0
     totalDistance = 0
     first = True
     for t in ts:
@@ -408,16 +430,17 @@ def getTotalDistanceTraveled(truckId, datenum,db=WATTS_DATA_DB_KEY,):
             dist = t.point
             first = False
             continue
-        totalDistance += kilDist(dist,t.point)
+        totalDistance += kilDist(dist, t.point)
 
         dist = t.point
     return totalDistance
 
-def getTotalTimeOnRoad(truckId, datenum,db=WATTS_DATA_DB_KEY,):
-    ts = getTruckPoints(truckId,datenum,db)
-    dist,tme = 0,0
+
+def getTotalTimeOnRoad(truckId, datenum, db=WATTS_DATA_DB_KEY, ):
+    ts = getTruckPoints(truckId, datenum, db)
+    dist, tme = 0, 0
     totalDistance = 0
-    totalTime = datetime.timedelta(hours=0,minutes=0,seconds=0)
+    totalTime = datetime.timedelta(hours=0, minutes=0, seconds=0)
     first = True
     for t in ts:
         if first:
@@ -425,19 +448,20 @@ def getTotalTimeOnRoad(truckId, datenum,db=WATTS_DATA_DB_KEY,):
             tme = t.time
             first = False
             continue
-        curr = kilDist(dist,t.point)
+        curr = kilDist(dist, t.point)
         totalDistance += curr
 
         if curr > 0:
             x = getTimeDeltas(t.time) - getTimeDeltas(tme)
-            totalTime = totalTime+x
+            totalTime = totalTime + x
         dist = t.point
         tme = t.time
 
-    return totalTime.total_seconds()/3600
+    return totalTime.total_seconds() / 3600
+
 
 def getAverageSpeedByDatenum(truckId, datenum):
-    return getTotalDistanceTraveled(truckId,datenum)/getTotalTimeOnRoad(truckId,datenum)
+    return getTotalDistanceTraveled(truckId, datenum) / getTotalTimeOnRoad(truckId, datenum)
 
 
 def getAddressForStop(stop):
