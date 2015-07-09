@@ -41,6 +41,7 @@ For June 30th, the month_num will be 6 while day_of_month will be 30. Therefore 
 * Total Distance Traveled for Truck and Date (*getTotalDistanceTraveled*) - returns the total distance traveled for a truck on a given day
 * Total Time on Road for Truck and Date (*getTotalTimeOnRoad*) - returns the total time on road traveled for a truck on a given day
 * Average Speed for Truck and Date (*getAverageSpeedByDatenum*) - returns the average speed on road for truck on a given day
+* Address or Stops (*getAddressForStop*) - returns the reverse geocoded address for a stop
 
 ## stop and stop properties
 * A Stop is the 20 meter geographical radius where we have observed multiple gps points from a truck for greater than 10 minutes. 
