@@ -28,7 +28,7 @@ refer to the sample file in the sampledata folder.
 ## internal date formats - datenum
 A pseudo indicator for date called DateNum is used to make processing of dates easy. 
 DateNum is calculated as below:
-```Datenum = month_num * 31 + day_of_month
+>Datenum = month_num * 31 + day_of_month
 
 For June 30th, the month_num will be 6 while day_of_month will be 30. Therefore the datenum for June 30th will be 216.
 
