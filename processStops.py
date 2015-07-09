@@ -1,8 +1,10 @@
 import datetime
+
 from init import *
 from util import (kilDist,getTimeDeltas,revGeoCode)
 from processVehicles import findStopsAll
 from classes import *
+
 
 EMORNING = 'emorning'
 LMORNING = 'lmorning'
@@ -436,3 +438,7 @@ def getTotalTimeOnRoad(truckId, datenum,db=WATTS_DATA_DB_KEY,):
 
 def getAverageSpeedByDatenum(truckId, datenum):
     return getTotalDistanceTraveled(truckId,datenum)/getTotalTimeOnRoad(truckId,datenum)
+
+
+def getAddressForStop(stop):
+    return revGeoCode(stop.lat, stop.lon)
