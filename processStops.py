@@ -417,7 +417,11 @@ def getTruckScheduleForDay(truckId, dateNum):
         vl = dict[d]
         schd[vl.time] = list([vl.lat, vl.lon, vl.duration])
 
-    return schd
+    ret = []
+    for i in sorted(schd):
+        ret.append((i, schd[i]))
+
+    return ret
 
 
 def getTotalDistanceTraveled(truckId, datenum, db=WATTS_DATA_DB_KEY, ):
@@ -459,10 +463,24 @@ def getTotalTimeOnRoad(truckId, datenum, db=WATTS_DATA_DB_KEY, ):
 
     return totalTime.total_seconds() / 3600
 
-
 def getAverageSpeedByDatenum(truckId, datenum):
     return getTotalDistanceTraveled(truckId, datenum) / getTotalTimeOnRoad(truckId, datenum)
 
-
 def getAddressForStop(stop):
     return revGeoCode(stop.lat, stop.lon)
+
+
+# #
+# returns metrics (average speed, cost, distance) between
+# stops on the file
+# accepts StopProperties as input
+def getMetricCostBetweenStops(stopA, stopB):
+    distance = kilDist(Point(stopA.lat, stopA.lon), Point(stopB.lat, stopB.lon))
+    return distance
+
+#
+# #print getTrucks(WATTS_DATA_DB_KEY)
+# a = getTruckScheduleForDay("11FB5201",259)
+# b = getStopsFromTruckDate("11FB5201",259)
+# print a
+# print getMetricCostBetweenStops(b[1],b[2])
