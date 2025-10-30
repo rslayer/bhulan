@@ -111,7 +111,7 @@ def getStopsFromTruckDate(truckId, dateNum=None, db=WATTS_DATA_DB_KEY):
         props = StopProperties.findItemList(TRUCK_ID_KEY, truckId, db)
         for s in props:
             x = Stop.findItem(ID_KEY, s.stopPropId, db)
-            if stops.has_key(x.id):
+            if x.id in stops:
                 continue
             else:
                 stops[x.id] = s
@@ -121,7 +121,7 @@ def getStopsFromTruckDate(truckId, dateNum=None, db=WATTS_DATA_DB_KEY):
         for s in props:
             x = Stop.findItem(ID_KEY, s.stopPropId, db)
             #print x.id,
-            if stops.has_key(x.id):
+            if x.id in stops:
                 #print ":x",
                 continue
             else:
@@ -315,7 +315,7 @@ def getStopByDuration(drtn, db=WATTS_DATA_DB_KEY):
         props = getStopPropsFromStopId(st.id)
         for prp in props:
             p = props[prp]
-            if retd.has_key(st.id):
+            if st.id in retd:
                 if (float(p.duration) / 60) > drtn:
                     ls = [st.id, p.lat, p.lon, p.truckId, p.duration, p.time, p.dateNum]
                     retd[st.id].append([p.id, p.lat, p.lon, p.duration, p.time, p.truckId, p.dateNum])
@@ -364,7 +364,7 @@ def getStopStatistics(truckId=None, dateNum=None):
 
 
 def windowhelper(timewindow, time, i):
-    if timewindow.has_key(time):
+    if time in timewindow:
         timewindow[time].append((i.stopPropId, i.lat, i.lon, i.truckId, i.dateNum, i.time, i.duration))
     else:
         timewindow[time] = []
@@ -401,7 +401,7 @@ def getTruckList(db=WATTS_DATA_DB_KEY):
     tdict = {}
     tlist = TruckPoint.getItemList(db)
     for t in tlist:
-        if tdict.has_key(t.truckId):
+        if t.truckId in tdict:
             tdict[t.truckId] += 1
         else:
             tdict[t.truckId] = 1
