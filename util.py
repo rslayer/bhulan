@@ -206,13 +206,13 @@ def notify(message=None):
         return
 
 def addIfKey(struct, key, item):
-    if struct.has_key(key):
+    if key in struct:
         struct[key].append(item)
     else:
         struct[key] = [item]
 
 def getIfKey(struct, key, default=None):
-    if struct.has_key(key):
+    if key in struct:
         return struct[key]
     return default
 
