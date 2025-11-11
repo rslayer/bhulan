@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+*.html
+*.png
+visualize_palo_alto.py
+visualize_palo_alto_standalone.py
