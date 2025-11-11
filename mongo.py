@@ -142,7 +142,7 @@ def getBigData(fileName, db=BIG_DATA_DB_KEY):
     db = getDb(db)
     fs = gridfs.GridFS(db)
     data = None
-    print fileName
+    print(fileName)
     if fs.exists(fileName=fileName):
         string = fs.get_last_version(fileName=fileName)
         # ooo = string.read()
@@ -168,9 +168,9 @@ def saveBigItem(key, value, db, tblKey):
         saveBigData(key, item, db)
         
 def findMax(tbl, key):
-    print key
+    print(key)
     item = tbl.find().sort(key,-1).limit(1)
-    print item
+    print(item)
     # print item[0]
     # print item[0][key]
     return list(item)[0][key]
@@ -183,9 +183,9 @@ def findMax(tbl, key):
     # return res
 
 def findMin(tbl, key):
-    print key
+    print(key)
     item = tbl.find().sort(key,1).limit(1)
-    print item
+    print(item)
     # print item[0]
     # print item[0][key]
     # return item[0][key]

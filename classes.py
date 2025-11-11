@@ -232,6 +232,6 @@ class Output(DBItem):
     def save(self):
         self.item[TIME_KEY] = self.time
         self.item[EDGE_ID_KEY] = self.edgeId
-        self.self.item[CONF_KEY] = self.conf
+        self.item[CONF_KEY] = self.conf
         self.item[FILE_NUM_KEY] = self.fileNum
         super(Output, self).save(Output.tblKey)

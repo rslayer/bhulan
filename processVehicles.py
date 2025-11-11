@@ -122,12 +122,12 @@ def getGPSFrequency(truckId, dateNum, db=WATTS_DATA_DB_KEY):
         time2 = getSeconds(point2.time)
 
         diffs.append(time2 - time1)
-    print diffs
+    print(diffs)
     return sum(diffs) / float(numPoints - 1)
 
 def sortList(stDict):
-    for key in sorted(stDict.iterkeys()):
-        print "%s : %s" % (key, stDict[key])
+    for key in sorted(stDict.keys()):
+        print("%s : %s" % (key, stDict[key]))
 
 ################# Begin Computed Funcs #######################
 
@@ -231,7 +231,7 @@ def findStopsAll(db=WATTS_DATA_DB_KEY, constraint=None, trucks=None,datenums=Non
 
     for dns in datenums:
         for truckId in trucks:
-            print 'processing: '+str(truckId)+' for date: '+str(dns)
+            print('processing: '+str(truckId)+' for date: '+str(dns))
             stops = findStops(truckId, dns, db, constraint)
             for s in stops:
                 dat = [dns,truckId, s['point'].lat, s['point'].lon, s['radius'],s['startStop'][0],s['startStop'][1]]
@@ -268,7 +268,7 @@ def createMongoItem(code, patent, ts, lat, lon, direction, commune, velocity, te
 ##
 # current version of the API is hardcoded to read excel files in a given format
 def readData(filename, db):
-    print 'importing file:',filename
+    print('importing file:', filename)
     workbook = xlrd.open_workbook(filename)
     worksheet = workbook.sheet_by_name(WORKSHEET_NAME)
     num_rows = worksheet.nrows - 1
