@@ -26,7 +26,7 @@ def isStart(edge, nodeId):
 #excel function
 # http://stackoverflow.com/questions/3727916/xldate-as-tuple
 def getDate(timestamp):
-    print "timestamp: " + str(timestamp)
+    print("timestamp: " + str(timestamp))
     return xlrd.xldate_as_tuple(timestamp, 0)
 
 def getDateTime(ts):
@@ -79,7 +79,7 @@ def getHours(timestamp):
 def getTime(func, statement, *args):
     start = time.time()
     returnValue = func(*args)
-    print statement + ": " + str((time.time() - start))
+    print(statement + ": " + str((time.time() - start)))
 
     return returnValue
 
@@ -169,8 +169,8 @@ def mileDist(point1, point2):
     try:
         arc = findArc(point1, point2)
     except:
-        print "Point 1: "  + str(point1)
-        print "Point 2: " + str(point2)
+        print("Point 1: "  + str(point1))
+        print("Point 2: " + str(point2))
     return arc * 3960
 
 def kilDist(point1, point2):
@@ -178,8 +178,8 @@ def kilDist(point1, point2):
     try:
         arc = findArc(point1, point2)
     except:
-        print "Point 1: "  + str(point1)
-        print "Point 2: " + str(point2)
+        print("Point 1: "  + str(point1))
+        print("Point 2: " + str(point2))
     return arc * 6373
 
 # http://www.movable-type.co.uk/scripts/latlong.html
@@ -202,7 +202,7 @@ def getCoord(meters):
 
 def notify(message=None):
     if message is not None:
-        print message
+        print(message)
         return
 
 def addIfKey(struct, key, item):
