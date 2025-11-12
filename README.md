@@ -1,5 +1,7 @@
 # bhulan
 An opensource python library for GPS data processing
+
+> **Note**: Repository access verified and functional.
 [Bhulan](https://en.wikipedia.org/wiki/Indus_river_dolphin) enables quick processing of raw gps data to identify properties of a vehicle's movements within the given gps trace. Using the api, you can identify a vehicle's route, stops, duration of stops, schedules, and clusters of service among other properties. 
 
 ## base requirements
