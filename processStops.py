@@ -172,7 +172,7 @@ def getStopPropsCombos(db=WATTS_DATA_DB_KEY, stopPropId=None, thresh=None):
 
 # stop ID, lat, lon, time of day, duration
 def computeStopData():
-    print 'processing stops for each truck and date - this will take time, please be patient'
+    print('processing stops for each truck and date - this will take time, please be patient')
     stops = {}
     stats = {}
     stopList = []
@@ -344,22 +344,22 @@ def getStopStatistics(truckId=None, dateNum=None):
     stprops = getStopPropsFromTruckDate(truckId, dateNum)
     stops = getStopsFromTruckDate(truckId, dateNum)
 
-    print "TOTAL STOP PROPS:", len(stprops)
-    print "TOTAL STOPs:", len(stops)
+    print("TOTAL STOP PROPS:", len(stprops))
+    print("TOTAL STOPs:", len(stops))
     for s in stprops:
         singStop = getStopFromStopPropId(s.id)
-        print '--- TRUCK DATA ---'
-        print 'STOP PROP ID: ' + str(s.id)
-        print 'STOP ID: ' + str(singStop.id)
-        print 'CENTROID LAT: ' + str(singStop.lat)
-        print 'CENTROID LON: ' + str(singStop.lon)
-        print 'LAT: ' + str(s.lat)
-        print 'LON: ' + str(s.lon)
-        print 'ADDRESS: ' + s.address
-        print 'TRUCK ID: ' + s.truckId
-        print 'DATENUM: ' + str(s.dateNum)
-        print 'TIME: ' + s.time
-        print 'DURATION: ' + s.duration
+        print('--- TRUCK DATA ---')
+        print('STOP PROP ID: ' + str(s.id))
+        print('STOP ID: ' + str(singStop.id))
+        print('CENTROID LAT: ' + str(singStop.lat))
+        print('CENTROID LON: ' + str(singStop.lon))
+        print('LAT: ' + str(s.lat))
+        print('LON: ' + str(s.lon))
+        print('ADDRESS: ' + s.address)
+        print('TRUCK ID: ' + s.truckId)
+        print('DATENUM: ' + str(s.dateNum))
+        print('TIME: ' + s.time)
+        print('DURATION: ' + s.duration)
     return stprops, stops
 
 

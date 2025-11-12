@@ -8,7 +8,7 @@ import sys
 def sendtoCartodb(fileloc):
     files = {'file': open(fileloc)}
     r = requests.post(CARTO_URL+CARTO_DB_API_KEY,files=files)
-    print r.text
+    print(r.text)
     return '0'
 
 # Save stops to file for future processing
@@ -64,7 +64,7 @@ def saveTruckDateCombosToFile(truckId,datenum, db=WATTS_DATA_DB_KEY):
     filename = GPS_FILE_DIRECTORY+truckId+"_"+str(datenum)+".csv"
     wf = open(filename,'w')
     wf.write("truckid,datenum,lat,lng,address,time,duration\n")
-    print "total:",len(dict)
+    print("total:", len(dict))
     for d in dict:
         x = dict[d]
         if inSantiago(x):
