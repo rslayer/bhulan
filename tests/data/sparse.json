@@ -1,0 +1,23 @@
+[
+  {
+    "device_id": "TRK-404",
+    "timestamp": 1714568400,
+    "lat": 51.5074,
+    "lon": -0.1278
+  },
+  {
+    "device_id": "TRK-404",
+    "timestamp": 1714568700,
+    "lat": 51.5084,
+    "lon": -0.1268,
+    "speed_kph": 35.5
+  },
+  {
+    "device_id": "TRK-404",
+    "timestamp": 1714569000,
+    "lat": 51.5094,
+    "lon": -0.1258,
+    "speed_kph": 42.1,
+    "heading": 45
+  }
+]
