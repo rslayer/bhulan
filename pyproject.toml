@@ -1,0 +1,66 @@
+[tool.poetry]
+name = "bhulan"
+version = "2.0.0"
+description = "GPS data processing and ingestion system"
+authors = ["Bhulan Contributors"]
+license = "MIT"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.8"
+pydantic = "^2.0"
+pydantic-settings = "^2.0"
+pymongo = "^4.0"
+fastapi = "^0.104.0"
+uvicorn = {extras = ["standard"], version = "^0.24.0"}
+pandas = "^2.0"
+openpyxl = "^3.1.0"
+python-dateutil = "^2.8.0"
+kafka-python = {version = "^2.0", optional = true}
+paho-mqtt = {version = "^1.6", optional = true}
+boto3 = {version = "^1.28", optional = true}
+pyarrow = {version = "^13.0", optional = true}
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^7.4"
+pytest-asyncio = "^0.21"
+pytest-cov = "^4.1"
+black = "^23.0"
+ruff = "^0.1"
+mypy = "^1.5"
+
+[tool.poetry.extras]
+kafka = ["kafka-python"]
+mqtt = ["paho-mqtt"]
+s3 = ["boto3"]
+parquet = ["pyarrow"]
+all = ["kafka-python", "paho-mqtt", "boto3", "pyarrow"]
+
+[tool.poetry.scripts]
+bhulan-api = "bhulan.api.app:main"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.black]
+line-length = 100
+target-version = ['py38', 'py39', 'py310', 'py311']
+
+[tool.ruff]
+line-length = 100
+select = ["E", "F", "W", "I", "N"]
+ignore = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
+addopts = "-v --cov=bhulan --cov-report=term-missing"
+
+[tool.mypy]
+python_version = "3.8"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
