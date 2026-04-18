@@ -37,12 +37,11 @@ function Stat({ label, value, icon, hint }: StatProps) {
   );
 }
 
-function fmtTs(iso: string): string {
-  try {
-    return new Date(iso).toLocaleString();
-  } catch {
-    return iso;
-  }
+function fmtTs(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleString();
 }
 
 export function InsightsPanel({ report }: Props) {
@@ -81,8 +80,8 @@ export function InsightsPanel({ report }: Props) {
           value={`${s.accepted_point_count} / ${s.point_count}`}
           icon={<MapPin className="h-4 w-4" />}
           hint={
-            report.quality.rejected_point_count > 0
-              ? `${report.quality.rejected_point_count} rejected`
+            report.quality.rejected_points > 0
+              ? `${report.quality.rejected_points} rejected`
               : undefined
           }
         />
@@ -92,7 +91,7 @@ export function InsightsPanel({ report }: Props) {
         <div className="flex items-center gap-2 text-xs text-slate-500">
           <Timer className="h-3.5 w-3.5" />
           <span>
-            {fmtTs(s.time_range[0])} &rarr; {fmtTs(s.time_range[1])}
+            {fmtTs(s.time_range.start)} &rarr; {fmtTs(s.time_range.end)}
           </span>
         </div>
       )}
