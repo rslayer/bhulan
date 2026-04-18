@@ -17,7 +17,8 @@ export function formatMinutes(min: number): string {
   if (!Number.isFinite(min) || min <= 0) return "0 min";
   if (min < 1) return `${Math.round(min * 60)} s`;
   if (min < 60) return `${min.toFixed(1)} min`;
-  const hours = Math.floor(min / 60);
-  const rem = Math.round(min % 60);
+  const totalRounded = Math.round(min);
+  const hours = Math.floor(totalRounded / 60);
+  const rem = totalRounded % 60;
   return `${hours} h ${rem} min`;
 }
