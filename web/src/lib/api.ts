@@ -148,7 +148,14 @@ export function pointsToCsv(points: Point[]): string {
   return points
     .map((p) => {
       const parts = [p.lat.toString(), p.lon.toString()];
-      if (p.ts_utc) parts.push(p.ts_utc);
+      // Preserve column positions: col 2 is always the timestamp, col 3
+      // is speed. Without this, a point with a speed but no timestamp
+      // (e.g. a FIT record from a device that doesn't stamp each frame)
+      // would serialize as ``lat,lon,speed`` and the headerless CSV
+      // parser would interpret the speed string as a timestamp via
+      // ``_parse_ts``, fabricating a bogus date and dropping speed
+      // entirely. Emit an empty ts column to keep the shape stable.
+      if (p.ts_utc || p.speed_mps != null) parts.push(p.ts_utc ?? "");
       if (p.speed_mps != null) parts.push(String(p.speed_mps));
       return parts.join(",");
     })
