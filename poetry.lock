@@ -360,6 +360,31 @@ typing-extensions = ">=4.8.0"
 all = ["email-validator (>=2.0.0)", "httpx (>=0.23.0)", "itsdangerous (>=1.1.0)", "jinja2 (>=2.11.2)", "orjson (>=3.2.1)", "pydantic-extra-types (>=2.0.0)", "pydantic-settings (>=2.0.0)", "python-multipart (>=0.0.5)", "pyyaml (>=5.3.1)", "ujson (>=4.0.1,!=4.0.2,!=4.1.0,!=4.2.0,!=4.3.0,!=5.0.0,!=5.1.0)", "uvicorn[standard] (>=0.12.0)"]
 
 [[package]]
+name = "fitdecode"
+version = "0.11.0"
+description = "FIT file parser and decoder"
+optional = false
+python-versions = ">=3.6"
+files = [
+    {file = "fitdecode-0.11.0-py3-none-any.whl", hash = "sha256:a1bdb9b4d1e9ebac0001fc58c22fe07a3f9967ca4e13258c6ef99cdb8d697a78"},
+    {file = "fitdecode-0.11.0.tar.gz", hash = "sha256:52d920e50eaa76eb065b20bfd4e42f72195e894a079098dacc1cafa908cd4b83"},
+]
+
+[package.extras]
+dev = ["build", "check_manifest (>=0.48)", "dlint", "flake8", "flake8-bugbear", "flake8-import-order", "flake8-noqa", "flake8-pyproject", "flake8-ruff", "mccabe", "openpyxl", "pycodestyle", "pyflakes", "pytest", "readme_renderer (>=33.0)", "setuptools (>=61.0.0)", "sphinx", "sphinx_rtd_theme", "twine"]
+
+[[package]]
+name = "gpxpy"
+version = "1.6.2"
+description = "GPX file parser and GPS track manipulation library"
+optional = false
+python-versions = ">=3.6"
+files = [
+    {file = "gpxpy-1.6.2-py3-none-any.whl", hash = "sha256:289bc2d80f116c988d0a1e763fda22838f83005573ece2bbc6521817b26fb40a"},
+    {file = "gpxpy-1.6.2.tar.gz", hash = "sha256:a72c484b97ec42b80834353b029cc8ee1b79f0ffca1179b2210bb3baf26c01ae"},
+]
+
+[[package]]
 name = "h11"
 version = "0.16.0"
 description = "A pure-Python, bring-your-own-I/O implementation of HTTP/1.1"
@@ -1349,6 +1374,17 @@ files = [
 cli = ["click (>=5.0)"]
 
 [[package]]
+name = "python-multipart"
+version = "0.0.19"
+description = "A streaming multipart parser for Python"
+optional = false
+python-versions = ">=3.8"
+files = [
+    {file = "python_multipart-0.0.19-py3-none-any.whl", hash = "sha256:f8d5b0b9c618575bf9df01c684ded1d94a338839bdd8223838afacfb4bb2082d"},
+    {file = "python_multipart-0.0.19.tar.gz", hash = "sha256:905502ef39050557b7a6af411f454bc19526529ca46ae6831508438890ce12cc"},
+]
+
+[[package]]
 name = "pytz"
 version = "2026.1.post1"
 description = "World timezone definitions, modern and historical"
@@ -2108,4 +2144,4 @@ s3 = ["boto3"]
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.9"
-content-hash = "b9e9cb32715a2324725c95a9b0987c7b5db3348bc485947711aa8676a71670d2"
+content-hash = "f44e582fa2fff079bb3f237c6b286f2d6ac266f6d9ac5ced3a5ed8630520feb9"

@@ -51,6 +51,14 @@ class InsightsOptions(BaseModel):
         le=10_000,
         description="If set, merge consecutive stops whose centroids are within this radius",
     )
+    geocode_stops: bool = Field(
+        False,
+        description=(
+            "If true, reverse-geocode each stop's centroid via Nominatim and "
+            "populate StopOut.place_name. Respects Nominatim's 1 req/sec "
+            "limit; expect +N seconds latency for N unique stops."
+        ),
+    )
 
 
 class InsightsRequest(BaseModel):
@@ -99,6 +107,13 @@ class StopOut(BaseModel):
     duration_min: float
     radius_m: float
     sample_count: int
+    place_name: Optional[str] = Field(
+        None,
+        description=(
+            "Reverse-geocoded label for the centroid. Only populated when "
+            "InsightsOptions.geocode_stops is true; otherwise None."
+        ),
+    )
 
 
 class SegmentOut(BaseModel):
@@ -165,6 +180,32 @@ def _split_points(points: List[PointIn]) -> Tuple[List[TrackSample], InsightsQua
             quality.rejected_points += 1
             quality.issues.append(f"point[{i}]: {e}")
     return samples, quality
+
+
+async def compute_insights_with_geocoding(
+    request: InsightsRequest,
+) -> InsightsReport:
+    """Compute insights and, if requested, reverse-geocode the stops.
+
+    HTTP handlers use this async helper instead of :func:`compute_insights`
+    when the caller opts into geocoding. Keeps :func:`compute_insights`
+    synchronous and pure — geocoding is a network-bound side effect that
+    doesn't belong in the analytics kernel.
+    """
+    report = compute_insights(request)
+    if not request.options.geocode_stops or not report.stops:
+        return report
+
+    # Local import to avoid httpx cost when geocoding is off.
+    from bhulan.analytics.geocoding import reverse_geocode_stops
+
+    coords = [(s.lat, s.lon) for s in report.stops]
+    names = await reverse_geocode_stops(coords)
+    enriched = [
+        s.model_copy(update={"place_name": name})
+        for s, name in zip(report.stops, names)
+    ]
+    return report.model_copy(update={"stops": enriched})
 
 
 def compute_insights(request: InsightsRequest) -> InsightsReport:

@@ -19,8 +19,36 @@ export interface paths {
          *
          *     Accepts either a structured ``points`` array (fast path) or raw ``text``
          *     that the server will parse using :func:`bhulan.analytics.parsers.parse_any`.
+         *     Setting ``options.geocode_stops = true`` enriches each detected stop
+         *     with a Nominatim-derived ``place_name`` (adds ~1s per unique stop).
          */
         post: operations["insights_endpoint_v1_insights_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/parse/file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Parse File Endpoint
+         * @description Parse an uploaded GPS file and return normalized points.
+         *
+         *     Dispatches on the filename extension: ``.gpx`` → gpxpy, ``.kml`` →
+         *     stdlib XML, ``.fit`` → fitdecode, anything else → the text parsers.
+         *     Files over ``MAX_UPLOAD_BYTES`` are rejected; the content is read into
+         *     memory once and parsed synchronously (parsing is CPU-bound and fast
+         *     enough that pushing it to a threadpool isn't worth it at this scale).
+         */
+        post: operations["parse_file_endpoint_v1_parse_file_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -211,6 +239,15 @@ export interface components {
             /** Max Lon */
             max_lon: number;
         };
+        /** Body_parse_file_endpoint_v1_parse_file_post */
+        Body_parse_file_endpoint_v1_parse_file_post: {
+            /**
+             * File
+             * Format: binary
+             * @description GPX, KML, FIT, CSV, JSON, or plain-text coordinates
+             */
+            file: string;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -243,6 +280,12 @@ export interface components {
              * @description If set, merge consecutive stops whose centroids are within this radius
              */
             merge_stops_within_m?: number | null;
+            /**
+             * Geocode Stops
+             * @description If true, reverse-geocode each stop's centroid via Nominatim and populate StopOut.place_name. Respects Nominatim's 1 req/sec limit; expect +N seconds latency for N unique stops.
+             * @default false
+             */
+            geocode_stops: boolean;
         };
         /** InsightsQuality */
         InsightsQuality: {
@@ -309,6 +352,23 @@ export interface components {
              * @description Ingestion job ID
              */
             ingest_id: string;
+        };
+        /**
+         * ParseFileResponse
+         * @description Response for :func:`parse_file_endpoint` — the frontend feeds the
+         *     accepted points straight into ``/v1/insights`` or ``/v1/plot/validate``.
+         */
+        ParseFileResponse: {
+            /** Filename */
+            filename: string;
+            /** Accepted */
+            accepted: number;
+            /** Rejected */
+            rejected: number;
+            /** Issues */
+            issues: string[];
+            /** Points */
+            points: components["schemas"]["PointIn"][];
         };
         /**
          * PlotRequest
@@ -408,6 +468,11 @@ export interface components {
             radius_m: number;
             /** Sample Count */
             sample_count: number;
+            /**
+             * Place Name
+             * @description Reverse-geocoded label for the centroid. Only populated when InsightsOptions.geocode_stops is true; otherwise None.
+             */
+            place_name?: string | null;
         };
         /** TimeRange */
         TimeRange: {
@@ -460,6 +525,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["InsightsReport"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    parse_file_endpoint_v1_parse_file_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_parse_file_endpoint_v1_parse_file_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ParseFileResponse"];
                 };
             };
             /** @description Validation Error */

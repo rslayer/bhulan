@@ -3,6 +3,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { FileUp, Trash2 } from "lucide-react";
+import { parseFile, pointsToCsv } from "@/lib/api";
 
 const PLACEHOLDER = `Paste coordinates — any of these formats work:
 
@@ -47,10 +48,49 @@ interface Props {
 
 export function CoordinateInput({ value, onChange, onSubmit, submitLabel = "Compute", loading }: Props) {
   const [dragging, setDragging] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadNote, setUploadNote] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   async function handleFile(file: File) {
-    const text = await file.text();
-    onChange(text);
+    setUploadError(null);
+    setUploadNote(null);
+    const lower = (file.name || "").toLowerCase();
+    // Plain-text formats round-trip through the textarea directly — no
+    // need to burn a backend call to re-serialize them.
+    if (
+      lower.endsWith(".csv") ||
+      lower.endsWith(".txt") ||
+      lower.endsWith(".json") ||
+      lower.endsWith(".geojson")
+    ) {
+      const text = await file.text();
+      onChange(text);
+      setUploadNote(`Loaded ${file.name}`);
+      return;
+    }
+    // Binary formats (GPX/KML/FIT) are parsed server-side; we replace the
+    // textarea contents with a CSV view of the parsed points so the rest
+    // of the pipeline (the /v1/insights and /v1/plot/validate endpoints)
+    // doesn't need format-specific handling.
+    setUploading(true);
+    try {
+      const res = await parseFile(file);
+      if (res.points.length === 0) {
+        setUploadError(
+          res.issues[0] ?? `Could not parse any coordinates from ${file.name}.`,
+        );
+        return;
+      }
+      onChange(pointsToCsv(res.points));
+      const noteParts: string[] = [`Loaded ${res.accepted} points from ${res.filename}`];
+      if (res.issues.length > 0) noteParts.push(res.issues[0]);
+      setUploadNote(noteParts.join(" · "));
+    } catch (e) {
+      setUploadError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setUploading(false);
+    }
   }
 
   function onDrop(e: React.DragEvent<HTMLDivElement>) {
@@ -85,18 +125,22 @@ export function CoordinateInput({ value, onChange, onSubmit, submitLabel = "Comp
             Clear
           </Button>
           <label
-            className="inline-flex h-8 cursor-pointer items-center gap-1 rounded-md px-3 text-xs hover:bg-slate-100"
+            className="inline-flex h-8 cursor-pointer items-center gap-1 rounded-md px-3 text-xs hover:bg-slate-100 aria-disabled:pointer-events-none aria-disabled:opacity-50"
             aria-label="Upload file"
+            aria-disabled={uploading || loading}
           >
             <FileUp className="h-4 w-4" />
-            Upload
+            {uploading ? "Parsing…" : "Upload"}
             <input
               type="file"
-              accept=".csv,.txt,.json,.geojson,text/plain"
+              accept=".csv,.txt,.json,.geojson,.gpx,.kml,.fit,text/plain"
               className="hidden"
+              disabled={uploading || loading}
               onChange={(e) => {
                 const f = e.target.files?.[0];
                 if (f) void handleFile(f);
+                // Reset so re-selecting the same file re-fires onChange.
+                e.target.value = "";
               }}
             />
           </label>
@@ -124,8 +168,19 @@ export function CoordinateInput({ value, onChange, onSubmit, submitLabel = "Comp
         />
       </div>
 
+      {uploadNote && !uploadError && (
+        <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
+          {uploadNote}
+        </div>
+      )}
+      {uploadError && (
+        <div className="rounded-md border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-900">
+          {uploadError}
+        </div>
+      )}
+
       <div className="flex justify-end">
-        <Button onClick={onSubmit} disabled={loading || !value.trim()}>
+        <Button onClick={onSubmit} disabled={loading || uploading || !value.trim()}>
           {loading ? "Working…" : submitLabel}
         </Button>
       </div>

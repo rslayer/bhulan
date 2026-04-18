@@ -12,7 +12,7 @@
           "insights"
         ],
         "summary": "Insights Endpoint",
-        "description": "Compute mobility insights for a batch of GPS coordinates.\n\nAccepts either a structured ``points`` array (fast path) or raw ``text``\nthat the server will parse using :func:`bhulan.analytics.parsers.parse_any`.",
+        "description": "Compute mobility insights for a batch of GPS coordinates.\n\nAccepts either a structured ``points`` array (fast path) or raw ``text``\nthat the server will parse using :func:`bhulan.analytics.parsers.parse_any`.\nSetting ``options.geocode_stops = true`` enriches each detected stop\nwith a Nominatim-derived ``place_name`` (adds ~1s per unique stop).",
         "operationId": "insights_endpoint_v1_insights_post",
         "requestBody": {
           "content": {
@@ -31,6 +31,48 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/InsightsReport"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/parse/file": {
+      "post": {
+        "tags": [
+          "insights"
+        ],
+        "summary": "Parse File Endpoint",
+        "description": "Parse an uploaded GPS file and return normalized points.\n\nDispatches on the filename extension: ``.gpx`` \u2192 gpxpy, ``.kml`` \u2192\nstdlib XML, ``.fit`` \u2192 fitdecode, anything else \u2192 the text parsers.\nFiles over ``MAX_UPLOAD_BYTES`` are rejected; the content is read into\nmemory once and parsed synchronously (parsing is CPU-bound and fast\nenough that pushing it to a threadpool isn't worth it at this scale).",
+        "operationId": "parse_file_endpoint_v1_parse_file_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_parse_file_endpoint_v1_parse_file_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ParseFileResponse"
                 }
               }
             }
@@ -354,6 +396,21 @@
         ],
         "title": "BBox"
       },
+      "Body_parse_file_endpoint_v1_parse_file_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "format": "binary",
+            "title": "File",
+            "description": "GPX, KML, FIT, CSV, JSON, or plain-text coordinates"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_parse_file_endpoint_v1_parse_file_post"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -405,6 +462,12 @@
             ],
             "title": "Merge Stops Within M",
             "description": "If set, merge consecutive stops whose centroids are within this radius"
+          },
+          "geocode_stops": {
+            "type": "boolean",
+            "title": "Geocode Stops",
+            "description": "If true, reverse-geocode each stop's centroid via Nominatim and populate StopOut.place_name. Respects Nominatim's 1 req/sec limit; expect +N seconds latency for N unique stops.",
+            "default": false
           }
         },
         "type": "object",
@@ -560,6 +623,46 @@
         ],
         "title": "NormalizationResult",
         "description": "Result of normalizing a batch of GPS data."
+      },
+      "ParseFileResponse": {
+        "properties": {
+          "filename": {
+            "type": "string",
+            "title": "Filename"
+          },
+          "accepted": {
+            "type": "integer",
+            "title": "Accepted"
+          },
+          "rejected": {
+            "type": "integer",
+            "title": "Rejected"
+          },
+          "issues": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Issues"
+          },
+          "points": {
+            "items": {
+              "$ref": "#/components/schemas/PointIn"
+            },
+            "type": "array",
+            "title": "Points"
+          }
+        },
+        "type": "object",
+        "required": [
+          "filename",
+          "accepted",
+          "rejected",
+          "issues",
+          "points"
+        ],
+        "title": "ParseFileResponse",
+        "description": "Response for :func:`parse_file_endpoint` \u2014 the frontend feeds the\naccepted points straight into ``/v1/insights`` or ``/v1/plot/validate``."
       },
       "PlotRequest": {
         "properties": {
@@ -799,6 +902,18 @@
           "sample_count": {
             "type": "integer",
             "title": "Sample Count"
+          },
+          "place_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Place Name",
+            "description": "Reverse-geocoded label for the centroid. Only populated when InsightsOptions.geocode_stops is true; otherwise None."
           }
         },
         "type": "object",
