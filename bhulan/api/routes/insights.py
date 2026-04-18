@@ -7,12 +7,12 @@ accept a list of GPS coordinates and return either a computed
 suitable for driving a client-side map.
 """
 
-from __future__ import annotations
+from typing import List, Optional, Tuple
 
-from typing import List, Optional
-
-from fastapi import APIRouter, Body, HTTPException
+from fastapi import APIRouter, Body, HTTPException, Request
 from pydantic import BaseModel, Field
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from bhulan.analytics.insights import (
     InsightsOptions,
@@ -22,8 +22,13 @@ from bhulan.analytics.insights import (
     compute_insights,
 )
 from bhulan.analytics.parsers import ParseError, estimate_input_rows, parse_any
+from bhulan.config.settings import settings
 
 router = APIRouter(prefix="/v1", tags=["insights"])
+
+# Local limiter instance — shares the same keying function as the app-level
+# limiter so slowapi's app.state handler recognizes decorated routes.
+limiter = Limiter(key_func=get_remote_address)
 
 
 class PlotRequest(BaseModel):
@@ -56,7 +61,7 @@ class RawInsightsRequest(BaseModel):
 
 def _materialize_points(
     structured: Optional[List[PointIn]], text: Optional[str]
-) -> tuple[List[PointIn], List[str]]:
+) -> Tuple[List[PointIn], List[str]]:
     issues: List[str] = []
     if structured:
         return list(structured), issues
@@ -74,7 +79,9 @@ def _materialize_points(
 
 
 @router.post("/insights", response_model=InsightsReport)
+@limiter.limit(lambda: settings.RATE_LIMIT_INSIGHTS or "1000/second")
 async def insights_endpoint(
+    request: Request,
     payload: RawInsightsRequest = Body(...),
 ) -> InsightsReport:
     """
@@ -92,7 +99,11 @@ async def insights_endpoint(
 
 
 @router.post("/plot/validate", response_model=PlotResponse)
-async def plot_validate_endpoint(payload: PlotRequest = Body(...)) -> PlotResponse:
+@limiter.limit(lambda: settings.RATE_LIMIT_PLOT or "1000/second")
+async def plot_validate_endpoint(
+    request: Request,
+    payload: PlotRequest = Body(...),
+) -> PlotResponse:
     """
     Parse and validate coordinates for the map view.
 

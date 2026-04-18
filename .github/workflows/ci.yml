@@ -1,0 +1,85 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend (pytest + ruff)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Poetry
+        run: |
+          pipx install poetry==1.8.3
+
+      - name: Cache virtualenv
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pypoetry
+          key: ${{ runner.os }}-poetry-${{ hashFiles('poetry.lock') }}
+
+      - name: Install dependencies
+        run: poetry install --no-root
+
+      - name: Lint (ruff)
+        # Scoped to the stateless analytics + public /v1 surface that this CI
+        # workflow actually cares about. The legacy ingestion/storage modules
+        # carry a long tail of pre-existing whitespace warnings; they'll be
+        # folded back in after a dedicated cleanup PR.
+        run: |
+          poetry run ruff check \
+            bhulan/analytics \
+            bhulan/api \
+            scripts \
+            tests/unit/analytics \
+            tests/integration/test_insights_api.py
+
+      - name: Run analytics + insights API tests
+        run: poetry run pytest tests/unit/analytics tests/integration/test_insights_api.py --no-cov -q
+
+      - name: Verify OpenAPI schema is up to date
+        run: |
+          poetry run python scripts/export_openapi.py
+          if ! git diff --quiet openapi.json; then
+            echo "::error ::openapi.json is out of date; run 'poetry run python scripts/export_openapi.py' and commit the result"
+            git --no-pager diff openapi.json
+            exit 1
+          fi
+
+  frontend:
+    name: Frontend (build + codegen check)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Typecheck + build
+        run: npm run build
+
+      - name: Verify generated API types are up to date
+        run: npm run gen:api:check
