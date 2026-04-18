@@ -16,10 +16,10 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
-from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
-from slowapi.util import get_remote_address
 
+from bhulan.api.limiter import limiter
 from bhulan.api.routes.auth import router as auth_router
 from bhulan.api.routes.compare import router as compare_router
 from bhulan.api.routes.history import router as history_router
@@ -67,8 +67,9 @@ app.add_middleware(
 
 # Per-IP rate limiting for the public /v1 surface. Individual limits are wired
 # on the route handlers via the ``limiter.limit(...)`` decorator so abusers hit
-# a 429 instead of melting the box. slowapi attaches itself through app.state.
-limiter = Limiter(key_func=get_remote_address, default_limits=[])
+# a 429 instead of melting the box. slowapi attaches itself through app.state,
+# and the *same* limiter instance is imported by routes/insights.py so its
+# exception handler's ``_inject_headers`` call sees the correct state.
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
 

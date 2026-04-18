@@ -54,6 +54,12 @@ class Settings(BaseSettings):
     # Reverse geocoding calls Nominatim over the network and can hold a worker
     # for 1s per unique stop. Keep it opt-in at the deployment level.
     ENABLE_REVERSE_GEOCODING: bool = False
+    # Comma-separated allowlist of reverse-proxy peer IPs whose
+    # ``X-Forwarded-For`` header should be honored when computing the
+    # per-IP rate-limit key. Use "*" to trust any peer (only safe when the
+    # app is not reachable except via the proxy). Empty means never trust
+    # the header and always key off the direct socket peer.
+    TRUSTED_PROXIES: str = ""
     # Where the built SPA lives, relative to the container workdir. If the
     # directory is missing, the API still works — only the mounted UI is skipped.
     WEB_DIST_DIR: str = "web/dist"
