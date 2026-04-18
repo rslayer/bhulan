@@ -97,3 +97,23 @@ def test_parse_any_dispatches_by_first_char():
 def test_parse_geojson_rejects_unknown_type():
     with pytest.raises(ParseError):
         parse_geojson({"type": "Wat"})
+
+
+def test_parse_csv_skips_out_of_range_lat_lon():
+    # A previous version of the parser would crash with a pydantic
+    # ``ValidationError`` when lat>90 or lon>180 appeared in user input,
+    # causing /v1/plot/validate to 500 instead of rejecting the row.
+    text = "12.97,77.59\n91.0,0.0\n0.0,181.0\n-12.34,56.78\n"
+    pts = parse_csv_text(text)
+    assert [(p.lat, p.lon) for p in pts] == [(12.97, 77.59), (-12.34, 56.78)]
+
+
+def test_parse_plain_text_skips_out_of_range_lat_lon():
+    text = "12.97,77.59\n91.0,0.0\n-12.34,56.78\n"
+    pts = parse_plain_text(text)
+    assert [(p.lat, p.lon) for p in pts] == [(12.97, 77.59), (-12.34, 56.78)]
+
+
+def test_parse_json_array_skips_out_of_range():
+    pts = parse_json("[[12.97,77.59],[91.0,0.0],[-12.34,56.78]]")
+    assert [(p.lat, p.lon) for p in pts] == [(12.97, 77.59), (-12.34, 56.78)]

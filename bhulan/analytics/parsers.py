@@ -71,6 +71,28 @@ def _parse_ts(val: Any) -> Optional[datetime]:
     return None
 
 
+def _safe_point(
+    lat: Optional[float],
+    lon: Optional[float],
+    ts: Optional[datetime] = None,
+    speed_mps: Optional[float] = None,
+) -> Optional[PointIn]:
+    """Build a :class:`PointIn`, returning None instead of raising.
+
+    Rows with out-of-range latitude/longitude (or any other pydantic
+    validation failure) are silently skipped so the public parsers can
+    surface the count via the quality channel rather than 500ing.
+    """
+    if lat is None or lon is None:
+        return None
+    if not (-90.0 <= lat <= 90.0) or not (-180.0 <= lon <= 180.0):
+        return None
+    try:
+        return PointIn(lat=lat, lon=lon, ts_utc=ts, speed_mps=speed_mps)
+    except Exception:
+        return None
+
+
 def _dict_to_point(row: Dict[str, Any]) -> Optional[PointIn]:
     lower = {str(k).strip().lower(): v for k, v in row.items()}
     lat = next((lower[k] for k in _LAT_KEYS if k in lower), None)
@@ -99,7 +121,7 @@ def _dict_to_point(row: Dict[str, Any]) -> Optional[PointIn]:
                 speed_val = raw
             break
 
-    return PointIn(lat=lat_f, lon=lon_f, ts_utc=ts, speed_mps=speed_val)
+    return _safe_point(lat_f, lon_f, ts, speed_val)
 
 
 def parse_csv_text(text: str) -> List[PointIn]:
@@ -137,7 +159,9 @@ def parse_csv_text(text: str) -> List[PointIn]:
             continue
         ts = _parse_ts(r[2]) if len(r) > 2 else None
         speed = _as_float(r[3]) if len(r) > 3 else None
-        points.append(PointIn(lat=lat, lon=lon, ts_utc=ts, speed_mps=speed))
+        p = _safe_point(lat, lon, ts, speed)
+        if p is not None:
+            points.append(p)
     return points
 
 
@@ -158,7 +182,9 @@ def parse_plain_text(text: str) -> List[PointIn]:
         if lat is None or lon is None:
             continue
         ts = _parse_ts(parts[2]) if len(parts) > 2 else None
-        points.append(PointIn(lat=lat, lon=lon, ts_utc=ts))
+        p = _safe_point(lat, lon, ts)
+        if p is not None:
+            points.append(p)
     return points
 
 
@@ -195,7 +221,9 @@ def parse_geojson(data: Any) -> List[PointIn]:
             next((props.get(k) for k in _TS_KEYS if k in props), None)
         )
         for lat, lon in _coords_from_geojson_geom(geom):
-            points.append(PointIn(lat=lat, lon=lon, ts_utc=ts))
+            p = _safe_point(lat, lon, ts)
+            if p is not None:
+                points.append(p)
 
     gtype = data.get("type") if isinstance(data, dict) else None
     if gtype == "FeatureCollection":
@@ -205,7 +233,9 @@ def parse_geojson(data: Any) -> List[PointIn]:
         _from_feature(data)
     elif gtype in {"Point", "MultiPoint", "LineString", "MultiLineString"}:
         for lat, lon in _coords_from_geojson_geom(data):
-            points.append(PointIn(lat=lat, lon=lon, ts_utc=None))
+            p = _safe_point(lat, lon, None)
+            if p is not None:
+                points.append(p)
     else:
         raise ParseError(f"Unrecognized GeoJSON type: {gtype!r}")
 
@@ -240,7 +270,9 @@ def parse_json(data: Any) -> List[PointIn]:
                 if lat is None or lon is None:
                     continue
                 ts = _parse_ts(item[2]) if len(item) > 2 else None
-                out.append(PointIn(lat=lat, lon=lon, ts_utc=ts))
+                p = _safe_point(lat, lon, ts)
+                if p is not None:
+                    out.append(p)
         return out
 
     raise ParseError("Unrecognized JSON shape; expected array or GeoJSON object")
