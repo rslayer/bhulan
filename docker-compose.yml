@@ -1,0 +1,38 @@
+# One-shot local setup for the public analytics surface. Mongo is intentionally
+# omitted — the /v1 endpoints are stateless, so you can ``docker compose up``
+# and get the whole app at http://localhost:8000 with no external services.
+#
+# To also run the ingestion endpoints (which require MongoDB), add a ``mongo``
+# service and point ``MONGO_URI`` at it — see the commented block below.
+
+services:
+  bhulan:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VITE_BACKEND_URL: ""
+    image: bhulan:local
+    ports:
+      - "8000:8000"
+    environment:
+      # Same-origin by default; override for a separate frontend origin.
+      ALLOWED_ORIGINS: "*"
+      # Tune per-IP rate limits here (slowapi syntax, e.g. "30/minute").
+      RATE_LIMIT_INSIGHTS: "30/minute"
+      RATE_LIMIT_PLOT: "60/minute"
+      # Uncomment once a mongo service is added to enable ingestion endpoints.
+      # MONGO_URI: "mongodb://mongo:27017"
+    restart: unless-stopped
+    # depends_on:
+    #   - mongo
+
+  # Uncomment to enable the ingestion subsystem (/ingest/trackpoints, /jobs/*).
+  # mongo:
+  #   image: mongo:7
+  #   volumes:
+  #     - mongo-data:/data/db
+  #   restart: unless-stopped
+
+# volumes:
+#   mongo-data: {}

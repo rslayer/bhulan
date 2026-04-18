@@ -4,11 +4,16 @@ FastAPI application for GPS data ingestion.
 Provides REST API endpoints for webhook ingestion, job status, and health checks.
 """
 
+import os
 import uuid
 from typing import Any, Dict, List, Optional, Union
 
 from fastapi import Body, Depends, FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
 
 from bhulan.api.routes.insights import router as insights_router
 from bhulan.config.settings import settings
@@ -26,15 +31,42 @@ app = FastAPI(
     version="2.1.0"
 )
 
+
+def _parse_origins(raw: str) -> List[str]:
+    """Parse a comma-separated CORS allowlist; '*' stays as a single wildcard."""
+    raw = (raw or "").strip()
+    if raw == "*" or raw == "":
+        return ["*"]
+    return [o.strip() for o in raw.split(",") if o.strip()]
+
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.ALLOWED_ORIGINS.split(","),
+    allow_origins=_parse_origins(settings.ALLOWED_ORIGINS),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+# Per-IP rate limiting for the public /v1 surface. Individual limits are wired
+# on the route handlers via the ``limiter.limit(...)`` decorator so abusers hit
+# a 429 instead of melting the box. slowapi attaches itself through app.state.
+limiter = Limiter(key_func=get_remote_address, default_limits=[])
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 app.include_router(insights_router)
+
+
+@app.get("/v1/healthz", tags=["insights"])
+async def healthz() -> Dict[str, str]:
+    """
+    Liveness probe that doesn't touch Mongo.
+
+    Used by Docker / uptime monitors to decide whether the process is up —
+    ``/health/ready`` still exists for the ingestion subsystem's DB check.
+    """
+    return {"status": "ok"}
 
 
 def _maybe_repo() -> Optional["MongoTrackPointRepository"]:
@@ -206,6 +238,15 @@ async def get_metrics():
         "message": "Prometheus metrics endpoint",
         "note": "Full metrics implementation pending"
     }
+
+
+# Mount the built SPA last so API routes registered above always win. When the
+# Vite bundle is missing (local dev, CI), this is a no-op — the API is usable
+# on its own. In the Docker image we copy the bundle in so a single container
+# serves both halves of the stack.
+_web_dist = os.path.abspath(settings.WEB_DIST_DIR)
+if os.path.isdir(_web_dist):
+    app.mount("/", StaticFiles(directory=_web_dist, html=True), name="web")
 
 
 if __name__ == "__main__":

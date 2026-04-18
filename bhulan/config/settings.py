@@ -35,8 +35,17 @@ class Settings(BaseSettings):
     API_HOST: str = "0.0.0.0"
     API_PORT: int = 8080
     API_KEY: Optional[str] = None
+    # Comma-separated CORS allowlist. Use "*" for dev/open; lock down for prod.
     ALLOWED_ORIGINS: str = "*"
-    
+
+    # Per-IP rate limits for the public /v1 surface. Expressed in slowapi syntax
+    # (e.g. "30/minute", "600/hour"). Empty disables the limit.
+    RATE_LIMIT_INSIGHTS: str = "30/minute"
+    RATE_LIMIT_PLOT: str = "60/minute"
+    # Where the built SPA lives, relative to the container workdir. If the
+    # directory is missing, the API still works — only the mounted UI is skipped.
+    WEB_DIST_DIR: str = "web/dist"
+
     ENABLE_PROMETHEUS: bool = True
     LOG_LEVEL: str = "INFO"
     

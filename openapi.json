@@ -1,0 +1,871 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Bhulan GPS API",
+    "description": "Mobility insights and map plotting for GPS coordinates, plus ingestion endpoints for vendor feeds.",
+    "version": "2.1.0"
+  },
+  "paths": {
+    "/v1/insights": {
+      "post": {
+        "tags": [
+          "insights"
+        ],
+        "summary": "Insights Endpoint",
+        "description": "Compute mobility insights for a batch of GPS coordinates.\n\nAccepts either a structured ``points`` array (fast path) or raw ``text``\nthat the server will parse using :func:`bhulan.analytics.parsers.parse_any`.",
+        "operationId": "insights_endpoint_v1_insights_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RawInsightsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InsightsReport"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/plot/validate": {
+      "post": {
+        "tags": [
+          "insights"
+        ],
+        "summary": "Plot Validate Endpoint",
+        "description": "Parse and validate coordinates for the map view.\n\nReturns the cleaned points plus counts of accepted and rejected rows so\nthe frontend can show a short summary alongside the rendered track.",
+        "operationId": "plot_validate_endpoint_v1_plot_validate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlotRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlotResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/healthz": {
+      "get": {
+        "tags": [
+          "insights"
+        ],
+        "summary": "Healthz",
+        "description": "Liveness probe that doesn't touch Mongo.\n\nUsed by Docker / uptime monitors to decide whether the process is up \u2014\n``/health/ready`` still exists for the ingestion subsystem's DB check.",
+        "operationId": "healthz_v1_healthz_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Healthz V1 Healthz Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health/ready": {
+      "get": {
+        "summary": "Health Check",
+        "description": "Health check endpoint.\n\nReturns 200 if service is ready and database is accessible.",
+        "operationId": "health_check_health_ready_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/config": {
+      "get": {
+        "summary": "Get Config",
+        "description": "Get non-sensitive configuration.\n\nReturns selected configuration values for debugging.",
+        "operationId": "get_config_config_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ingest/trackpoints": {
+      "post": {
+        "summary": "Ingest Trackpoints",
+        "description": "Ingest GPS track points via webhook.\n\nAccepts JSON payload with GPS data, normalizes it, and persists to database.\n\nArgs:\n    payload: JSON object or array of GPS records\n    vendor: Vendor identifier (generic, geotab, samsara)\n    ingest_id: Optional ingestion job ID (generated if not provided)\n    x_bhulan_mapping: Optional custom mapping JSON in header\n\nReturns:\n    NormalizationResult with accepted/rejected counts and errors",
+        "operationId": "ingest_trackpoints_ingest_trackpoints_post",
+        "parameters": [
+          {
+            "name": "vendor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Vendor/source identifier",
+              "default": "generic",
+              "title": "Vendor"
+            },
+            "description": "Vendor/source identifier"
+          },
+          {
+            "name": "ingest_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Ingestion job ID",
+              "title": "Ingest Id"
+            },
+            "description": "Ingestion job ID"
+          },
+          {
+            "name": "x-bhulan-mapping",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Custom mapping JSON",
+              "title": "X-Bhulan-Mapping"
+            },
+            "description": "Custom mapping JSON"
+          },
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": true
+                  }
+                ],
+                "title": "Payload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NormalizationResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/jobs/{ingest_id}": {
+      "get": {
+        "summary": "Get Job Status",
+        "description": "Get ingestion job status and statistics.\n\nArgs:\n    ingest_id: Ingestion job identifier\n\nReturns:\n    Job information including status, stats, and errors",
+        "operationId": "get_job_status_jobs__ingest_id__get",
+        "parameters": [
+          {
+            "name": "ingest_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Ingest Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/metrics": {
+      "get": {
+        "summary": "Get Metrics",
+        "description": "Get Prometheus-compatible metrics.\n\nReturns basic metrics about ingestion operations.",
+        "operationId": "get_metrics_metrics_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "BBox": {
+        "properties": {
+          "min_lat": {
+            "type": "number",
+            "title": "Min Lat"
+          },
+          "min_lon": {
+            "type": "number",
+            "title": "Min Lon"
+          },
+          "max_lat": {
+            "type": "number",
+            "title": "Max Lat"
+          },
+          "max_lon": {
+            "type": "number",
+            "title": "Max Lon"
+          }
+        },
+        "type": "object",
+        "required": [
+          "min_lat",
+          "min_lon",
+          "max_lat",
+          "max_lon"
+        ],
+        "title": "BBox"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "InsightsOptions": {
+        "properties": {
+          "stop_radius_m": {
+            "type": "number",
+            "maximum": 10000.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Stop Radius M",
+            "default": 50.0
+          },
+          "min_stop_minutes": {
+            "type": "number",
+            "maximum": 1440.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Min Stop Minutes",
+            "description": "Minutes",
+            "default": 5.0
+          },
+          "moving_speed_kmh": {
+            "type": "number",
+            "maximum": 300.0,
+            "minimum": 0.0,
+            "title": "Moving Speed Kmh",
+            "description": "Speed threshold for 'moving'",
+            "default": 3.6
+          },
+          "merge_stops_within_m": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 10000.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Merge Stops Within M",
+            "description": "If set, merge consecutive stops whose centroids are within this radius"
+          }
+        },
+        "type": "object",
+        "title": "InsightsOptions",
+        "description": "Tunables for the insights pipeline."
+      },
+      "InsightsQuality": {
+        "properties": {
+          "rejected_points": {
+            "type": "integer",
+            "title": "Rejected Points",
+            "default": 0
+          },
+          "issues": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Issues"
+          }
+        },
+        "type": "object",
+        "title": "InsightsQuality"
+      },
+      "InsightsReport": {
+        "properties": {
+          "summary": {
+            "$ref": "#/components/schemas/InsightsSummary"
+          },
+          "stops": {
+            "items": {
+              "$ref": "#/components/schemas/StopOut"
+            },
+            "type": "array",
+            "title": "Stops"
+          },
+          "segments": {
+            "items": {
+              "$ref": "#/components/schemas/SegmentOut"
+            },
+            "type": "array",
+            "title": "Segments"
+          },
+          "quality": {
+            "$ref": "#/components/schemas/InsightsQuality"
+          }
+        },
+        "type": "object",
+        "required": [
+          "summary",
+          "stops",
+          "segments",
+          "quality"
+        ],
+        "title": "InsightsReport"
+      },
+      "InsightsSummary": {
+        "properties": {
+          "point_count": {
+            "type": "integer",
+            "title": "Point Count"
+          },
+          "accepted_point_count": {
+            "type": "integer",
+            "title": "Accepted Point Count"
+          },
+          "time_range": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TimeRange"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "total_distance_km": {
+            "type": "number",
+            "title": "Total Distance Km"
+          },
+          "moving_time_min": {
+            "type": "number",
+            "title": "Moving Time Min"
+          },
+          "idle_time_min": {
+            "type": "number",
+            "title": "Idle Time Min"
+          },
+          "avg_moving_speed_kmh": {
+            "type": "number",
+            "title": "Avg Moving Speed Kmh"
+          },
+          "max_speed_kmh": {
+            "type": "number",
+            "title": "Max Speed Kmh"
+          },
+          "bbox": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BBox"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "point_count",
+          "accepted_point_count",
+          "time_range",
+          "total_distance_km",
+          "moving_time_min",
+          "idle_time_min",
+          "avg_moving_speed_kmh",
+          "max_speed_kmh",
+          "bbox"
+        ],
+        "title": "InsightsSummary"
+      },
+      "NormalizationResult": {
+        "properties": {
+          "accepted": {
+            "type": "integer",
+            "title": "Accepted",
+            "description": "Number of records accepted"
+          },
+          "rejected": {
+            "type": "integer",
+            "title": "Rejected",
+            "description": "Number of records rejected"
+          },
+          "errors": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Errors",
+            "description": "Row index to error message mapping"
+          },
+          "ingest_id": {
+            "type": "string",
+            "title": "Ingest Id",
+            "description": "Ingestion job ID"
+          }
+        },
+        "type": "object",
+        "required": [
+          "accepted",
+          "rejected",
+          "ingest_id"
+        ],
+        "title": "NormalizationResult",
+        "description": "Result of normalizing a batch of GPS data."
+      },
+      "PlotRequest": {
+        "properties": {
+          "points": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/PointIn"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Points",
+            "description": "Pre-structured points (preferred when the client can parse)"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text",
+            "description": "Raw user-pasted text: CSV, JSON, GeoJSON, or lat/lon lines"
+          }
+        },
+        "type": "object",
+        "title": "PlotRequest",
+        "description": "Request for :func:`plot_validate` \u2014 either structured points or raw text."
+      },
+      "PlotResponse": {
+        "properties": {
+          "accepted": {
+            "type": "integer",
+            "title": "Accepted"
+          },
+          "rejected": {
+            "type": "integer",
+            "title": "Rejected"
+          },
+          "issues": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Issues"
+          },
+          "points": {
+            "items": {
+              "$ref": "#/components/schemas/PointIn"
+            },
+            "type": "array",
+            "title": "Points"
+          }
+        },
+        "type": "object",
+        "required": [
+          "accepted",
+          "rejected",
+          "issues",
+          "points"
+        ],
+        "title": "PlotResponse",
+        "description": "Normalized points the frontend can drop straight onto a map."
+      },
+      "PointIn": {
+        "properties": {
+          "lat": {
+            "type": "number",
+            "maximum": 90.0,
+            "minimum": -90.0,
+            "title": "Lat"
+          },
+          "lon": {
+            "type": "number",
+            "maximum": 180.0,
+            "minimum": -180.0,
+            "title": "Lon"
+          },
+          "ts_utc": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ts Utc",
+            "description": "Timestamp in UTC; required for any time-based insight"
+          },
+          "speed_mps": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Speed Mps",
+            "description": "Optional device-reported speed"
+          }
+        },
+        "type": "object",
+        "required": [
+          "lat",
+          "lon"
+        ],
+        "title": "PointIn",
+        "description": "One GPS sample as it arrives over the wire."
+      },
+      "RawInsightsRequest": {
+        "properties": {
+          "points": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/PointIn"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Points"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text"
+          },
+          "options": {
+            "$ref": "#/components/schemas/InsightsOptions"
+          }
+        },
+        "type": "object",
+        "title": "RawInsightsRequest",
+        "description": "``/v1/insights`` request that accepts pasted text in lieu of structured input."
+      },
+      "SegmentOut": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "start_ts": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Ts"
+          },
+          "end_ts": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Ts"
+          },
+          "distance_km": {
+            "type": "number",
+            "title": "Distance Km"
+          },
+          "duration_min": {
+            "type": "number",
+            "title": "Duration Min"
+          },
+          "avg_speed_kmh": {
+            "type": "number",
+            "title": "Avg Speed Kmh"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "start_ts",
+          "end_ts",
+          "distance_km",
+          "duration_min",
+          "avg_speed_kmh"
+        ],
+        "title": "SegmentOut"
+      },
+      "StopOut": {
+        "properties": {
+          "lat": {
+            "type": "number",
+            "title": "Lat"
+          },
+          "lon": {
+            "type": "number",
+            "title": "Lon"
+          },
+          "start_ts": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Start Ts"
+          },
+          "end_ts": {
+            "type": "string",
+            "format": "date-time",
+            "title": "End Ts"
+          },
+          "duration_min": {
+            "type": "number",
+            "title": "Duration Min"
+          },
+          "radius_m": {
+            "type": "number",
+            "title": "Radius M"
+          },
+          "sample_count": {
+            "type": "integer",
+            "title": "Sample Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "lat",
+          "lon",
+          "start_ts",
+          "end_ts",
+          "duration_min",
+          "radius_m",
+          "sample_count"
+        ],
+        "title": "StopOut"
+      },
+      "TimeRange": {
+        "properties": {
+          "start": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Start"
+          },
+          "end": {
+            "type": "string",
+            "format": "date-time",
+            "title": "End"
+          }
+        },
+        "type": "object",
+        "required": [
+          "start",
+          "end"
+        ],
+        "title": "TimeRange"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}
