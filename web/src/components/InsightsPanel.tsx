@@ -108,7 +108,9 @@ export function InsightsPanel({ report }: Props) {
               {report.stops.map((s, i) => (
                 <div key={i} className="flex items-start justify-between py-2 text-sm">
                   <div>
-                    <div className="font-medium">Stop #{i + 1}</div>
+                    <div className="font-medium">
+                      {s.place_name ?? `Stop #${i + 1}`}
+                    </div>
                     <div className="text-xs text-slate-500">
                       {fmtTs(s.start_ts)} &rarr; {fmtTs(s.end_ts)}
                     </div>

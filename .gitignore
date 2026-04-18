@@ -8,3 +8,4 @@ visualize_palo_alto_standalone.py
 # Allowlisted source files that would otherwise be caught by the broad rules
 # above (which were written for the legacy plotting scripts).
 !web/index.html
+.coverage

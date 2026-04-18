@@ -1,8 +1,10 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { CoordinateInput } from "@/components/CoordinateInput";
 import { MapView } from "@/components/MapView";
+import { ShareLinkButton } from "@/components/ShareLinkButton";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { validatePlot, type Point } from "@/lib/api";
+import { decodeShareFragment } from "@/lib/permalink";
 
 export function PlotPage() {
   const [text, setText] = useState("");
@@ -12,6 +14,18 @@ export function PlotPage() {
   const [accepted, setAccepted] = useState(0);
   const [rejected, setRejected] = useState(0);
   const [issues, setIssues] = useState<string[]>([]);
+  const hydratedRef = useRef(false);
+
+  // Hydrate from a share fragment on first mount — see InsightsPage for
+  // the full rationale.
+  useEffect(() => {
+    if (hydratedRef.current) return;
+    hydratedRef.current = true;
+    const state = decodeShareFragment(window.location.hash);
+    if (state && state.tab === "plot") {
+      setText(state.text);
+    }
+  }, []);
 
   async function run() {
     setLoading(true);
@@ -69,6 +83,9 @@ export function PlotPage() {
                 )}
               </div>
             )}
+            <div className="flex justify-end">
+              <ShareLinkButton state={{ tab: "plot", text }} disabled={!text.trim()} />
+            </div>
           </CardContent>
         </Card>
       </div>
