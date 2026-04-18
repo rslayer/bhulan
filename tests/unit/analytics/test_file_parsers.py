@@ -49,6 +49,25 @@ def test_parse_gpx_rejects_invalid_payload():
         parse_gpx_bytes(b"not a gpx file, just text")
 
 
+def test_parse_gpx_with_route_does_not_raise():
+    # Regression: GPXRoutePoint doesn't carry a `speed` attribute in
+    # gpxpy 1.6, so dereferencing it directly AttributeError'd on any
+    # GPX file containing <rte> elements. Exercise the route branch.
+    gpx = (
+        b"<?xml version='1.0' encoding='UTF-8'?>"
+        b"<gpx version='1.1' creator='test' xmlns='http://www.topografix.com/GPX/1/1'>"
+        b"  <rte><name>r</name>"
+        b"    <rtept lat='12.97' lon='77.59'/>"
+        b"    <rtept lat='12.98' lon='77.60'/>"
+        b"  </rte>"
+        b"</gpx>"
+    )
+    points = parse_gpx_bytes(gpx)
+    assert len(points) == 2
+    assert points[0].lat == pytest.approx(12.97)
+    assert points[1].lon == pytest.approx(77.60)
+
+
 KML_LINESTRING = b"""<?xml version="1.0" encoding="UTF-8"?>
 <kml xmlns="http://www.opengis.net/kml/2.2">
   <Document><Placemark>

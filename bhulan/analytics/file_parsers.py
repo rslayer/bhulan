@@ -64,7 +64,12 @@ def parse_gpx_bytes(data: bytes) -> List[PointIn]:
 
     for route in gpx.routes:
         for pt in route.points:
-            _append_gpx_point(out, pt.latitude, pt.longitude, pt.time, pt.speed)
+            # GPX 1.1 doesn't define speed on <rtept> either; gpxpy's
+            # GPXRoutePoint mirrors GPXWaypoint and omits the attribute,
+            # so go through getattr like the waypoint branch below.
+            _append_gpx_point(
+                out, pt.latitude, pt.longitude, pt.time, getattr(pt, "speed", None)
+            )
 
     for wpt in gpx.waypoints:
         # Waypoints don't carry speed in the GPX 1.1 schema — gpxpy's
