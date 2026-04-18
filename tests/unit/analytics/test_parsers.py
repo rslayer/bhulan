@@ -8,6 +8,7 @@ import pytest
 
 from bhulan.analytics.parsers import (
     ParseError,
+    estimate_input_rows,
     parse_any,
     parse_csv_text,
     parse_geojson,
@@ -117,3 +118,25 @@ def test_parse_plain_text_skips_out_of_range_lat_lon():
 def test_parse_json_array_skips_out_of_range():
     pts = parse_json("[[12.97,77.59],[91.0,0.0],[-12.34,56.78]]")
     assert [(p.lat, p.lon) for p in pts] == [(12.97, 77.59), (-12.34, 56.78)]
+
+
+def test_estimate_input_rows_plain_text_without_header():
+    assert estimate_input_rows("12.97,77.59\n12.98,77.60\nbad,data\n91.0,0.0") == 4
+
+
+def test_estimate_input_rows_csv_with_header():
+    assert (
+        estimate_input_rows("lat,lon\n12.97,77.59\n12.98,77.60\n") == 2
+    )
+
+
+def test_estimate_input_rows_ignores_comments_and_blanks():
+    assert estimate_input_rows("# header\n\n12.97,77.59\n12.98,77.60\n") == 2
+
+
+def test_estimate_input_rows_json_array():
+    assert estimate_input_rows("[[1,2],[3,4],[5,6]]") == 3
+
+
+def test_estimate_input_rows_geojson_returns_none():
+    assert estimate_input_rows('{"type":"FeatureCollection","features":[]}') is None

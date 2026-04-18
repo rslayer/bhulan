@@ -302,3 +302,34 @@ def parse_any(text: str) -> List[PointIn]:
         pass
 
     return parse_plain_text(text)
+
+
+def estimate_input_rows(text: str) -> Optional[int]:
+    """Estimate how many data rows the user intended to submit.
+
+    Used to compute a ``rejected`` count for the ``/v1/plot/validate``
+    endpoint without threading counters through every parser. Returns
+    ``None`` when the format is not amenable to line counting (e.g. a
+    GeoJSON ``FeatureCollection`` whose feature count isn't known until
+    after parsing).
+    """
+    stripped = text.lstrip()
+    if stripped.startswith("{"):
+        return None
+    if stripped.startswith("["):
+        try:
+            data = json.loads(text)
+        except (json.JSONDecodeError, ValueError):
+            return None
+        if isinstance(data, list):
+            return len(data)
+        return None
+    lines = [
+        ln for ln in text.splitlines()
+        if ln.strip() and not ln.strip().startswith("#")
+    ]
+    if not lines:
+        return 0
+    first = lines[0]
+    is_header = any(c.isalpha() for c in first if c not in "-:TZ .+eE")
+    return max(len(lines) - (1 if is_header else 0), 0)

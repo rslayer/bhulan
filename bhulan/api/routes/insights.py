@@ -21,7 +21,7 @@ from bhulan.analytics.insights import (
     PointIn,
     compute_insights,
 )
-from bhulan.analytics.parsers import ParseError, parse_any
+from bhulan.analytics.parsers import ParseError, estimate_input_rows, parse_any
 
 router = APIRouter(prefix="/v1", tags=["insights"])
 
@@ -109,8 +109,19 @@ async def plot_validate_endpoint(payload: PlotRequest = Body(...)) -> PlotRespon
         else:
             rejected += 1
 
+    # Rows that the parser silently dropped (bad floats, out-of-range lat/lon,
+    # malformed CSV cells) don't show up in ``points`` at all. Estimate how
+    # many rows the user intended to submit from the raw text so we can
+    # surface the full rejected count to the client.
+    if payload.text and not payload.points:
+        expected = estimate_input_rows(payload.text)
+        if expected is not None:
+            dropped_in_parse = max(expected - len(points), 0)
+            if dropped_in_parse:
+                rejected += dropped_in_parse
+
     if rejected:
-        issues.append(f"{rejected} point(s) had coordinates outside valid ranges")
+        issues.append(f"{rejected} row(s) could not be used (invalid or out of range)")
 
     return PlotResponse(
         accepted=len(accepted),
