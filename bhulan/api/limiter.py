@@ -37,9 +37,19 @@ def rate_limit_key(request: Request) -> str:
     When the service is deployed behind a reverse proxy / CDN (the expected
     shape for the public web app), ``request.client.host`` is the proxy's
     IP — every user would share one rate-limit bucket. If
-    ``TRUSTED_PROXIES`` is set and the peer matches, honor the leftmost
-    ``X-Forwarded-For`` entry instead. Falls back to the direct peer IP for
-    local development or when no proxy is configured.
+    ``TRUSTED_PROXIES`` is set and the peer matches, honor the **rightmost**
+    ``X-Forwarded-For`` entry instead (this is the IP the trusted proxy
+    itself appended — i.e. the peer it actually saw). Falls back to the
+    direct peer IP for local development or when no proxy is configured.
+
+    Why rightmost and not leftmost: the leftmost XFF entry is whatever the
+    client sent, so an attacker can spoof it to rotate keys on every
+    request and bypass the rate limit entirely. Standard proxies
+    (nginx's ``proxy_add_x_forwarded_for``, Apache's ``mod_remoteip``,
+    AWS ALB, Cloudflare) *append* the observed peer IP, so the trusted
+    value is at the right. This assumes a single trusted proxy hop;
+    multi-hop deployments need to strip N known-trusted entries from
+    the right.
     """
     peer = get_remote_address(request)
     if not _TRUSTED_PROXIES:
@@ -49,8 +59,10 @@ def rate_limit_key(request: Request) -> str:
     fwd = request.headers.get("x-forwarded-for")
     if not fwd:
         return peer
-    # X-Forwarded-For: client, proxy1, proxy2 — leftmost is the original client.
-    client = fwd.split(",", 1)[0].strip()
+    # X-Forwarded-For: client, proxy1, proxy2 — the *rightmost* entry is the
+    # one the trusted proxy itself appended, i.e. the peer it actually saw.
+    # Taking the leftmost entry would let a client spoof any key they want.
+    client = fwd.rsplit(",", 1)[-1].strip()
     return client or peer
 
 
