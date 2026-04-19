@@ -7,6 +7,14 @@ interface Props {
   hotspots: HotspotOut[];
   title?: string;
   emptyNote?: string;
+  /**
+   * Grid size (metres) that produced these hotspots — shown as a
+   * "grid ~N m" hint on each row so users who tune ``hotspot_grid_m``
+   * see the setting reflected in the UI. Falls back to the backend
+   * default (100 m) when the caller doesn't know, which is still
+   * correct for the common case.
+   */
+  gridM?: number;
 }
 
 /**
@@ -15,7 +23,12 @@ interface Props {
  * caller asked for it. Used both on the single-track Insights page and
  * inside the Compare tab for "shared places" across tracks.
  */
-export function HotspotsList({ hotspots, title = "Hotspots", emptyNote }: Props) {
+export function HotspotsList({
+  hotspots,
+  title = "Hotspots",
+  emptyNote,
+  gridM = 100,
+}: Props) {
   return (
     <Card>
       <CardHeader>
@@ -53,7 +66,7 @@ export function HotspotsList({ hotspots, title = "Hotspots", emptyNote }: Props)
                   )}
                   {h.time_spent_min == null && <div>—</div>}
                   <div className="text-slate-500">
-                    grid ~{formatNumber(100, 0)} m
+                    grid ~{formatNumber(gridM, 0)} m
                   </div>
                 </div>
               </div>

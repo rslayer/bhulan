@@ -256,6 +256,7 @@ export function ComparePage() {
             hotspots={result.shared_hotspots}
             title="Shared hotspots"
             emptyNote="No overlapping density regions across tracks."
+            gridM={options.hotspot_grid_m}
           />
         )}
 

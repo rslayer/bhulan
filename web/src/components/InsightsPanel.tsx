@@ -15,6 +15,9 @@ import {
 
 interface Props {
   report: InsightsReport;
+  /** Pass-through to HotspotsList so the "grid ~N m" label reflects the
+   * actual setting when the caller tuned ``hotspot_grid_m``. */
+  hotspotGridM?: number;
 }
 
 interface StatProps {
@@ -46,7 +49,7 @@ function fmtTs(iso: string | null | undefined): string {
   return d.toLocaleString();
 }
 
-export function InsightsPanel({ report }: Props) {
+export function InsightsPanel({ report, hotspotGridM }: Props) {
   const s = report.summary;
 
   return (
@@ -132,7 +135,7 @@ export function InsightsPanel({ report }: Props) {
       </Card>
 
       <TripsList trips={report.trips ?? []} />
-      <HotspotsList hotspots={report.hotspots ?? []} />
+      <HotspotsList hotspots={report.hotspots ?? []} gridM={hotspotGridM} />
 
       {report.quality.issues.length > 0 && (
         <Card className="border-amber-300 bg-amber-50">
