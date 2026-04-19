@@ -323,7 +323,12 @@ async def compute_insights_with_geocoding(
     doesn't belong in the analytics kernel.
     """
     report = compute_insights(request)
-    if not request.options.geocode_stops or not report.stops:
+    if not request.options.geocode_stops:
+        return report
+    # A track can legitimately produce hotspots but no stops (dense but
+    # always-moving samples, e.g. commute corridors). Bail only when
+    # there's nothing to geocode on either side.
+    if not report.stops and not report.hotspots:
         return report
 
     # Local import to avoid httpx cost when geocoding is off.

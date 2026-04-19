@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { Fragment, useEffect } from "react";
 import {
   CircleMarker,
   MapContainer,
@@ -109,8 +109,11 @@ export function MapView({
         {normalizedTracks.map((t, tIdx) => {
           const line: [number, number][] = t.points.map((p) => [p.lat, p.lon]);
           const color = t.color ?? TRACK_COLORS[0];
+          // Use Fragment (not a DOM <div>) so we don't render a real
+          // <div> inside the Leaflet container — that can intercept
+          // pointer events and confuse Leaflet's layer DOM.
           return (
-            <div key={`track-${tIdx}`}>
+            <Fragment key={`track-${tIdx}`}>
               {line.length > 1 && (
                 <Polyline
                   positions={line}
@@ -159,7 +162,7 @@ export function MapView({
                   </Popup>
                 </CircleMarker>
               ))}
-            </div>
+            </Fragment>
           );
         })}
         {hotspots.map((h, i) => (
