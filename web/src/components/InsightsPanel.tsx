@@ -1,4 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { HotspotsList } from "@/components/HotspotsList";
+import { TripsList } from "@/components/TripsList";
 import type { InsightsReport } from "@/lib/api";
 import { formatMinutes, formatNumber } from "@/lib/utils";
 import {
@@ -128,6 +130,9 @@ export function InsightsPanel({ report }: Props) {
           )}
         </CardContent>
       </Card>
+
+      <TripsList trips={report.trips ?? []} />
+      <HotspotsList hotspots={report.hotspots ?? []} />
 
       {report.quality.issues.length > 0 && (
         <Card className="border-amber-300 bg-amber-50">

@@ -13,6 +13,13 @@ from typing import List, Optional, Tuple
 from pydantic import BaseModel, Field, field_validator
 
 from bhulan.analytics import mobility
+from bhulan.analytics.hotspots import (
+    DEFAULT_HOTSPOT_GRID_M,
+    DEFAULT_HOTSPOT_MAX_RESULTS,
+    DEFAULT_HOTSPOT_MIN_SAMPLES,
+    Hotspot,
+    detect_hotspots,
+)
 from bhulan.analytics.mobility import Segment, TrackSample, prepare_track
 from bhulan.analytics.stops import (
     DEFAULT_MIN_DURATION_S,
@@ -20,6 +27,12 @@ from bhulan.analytics.stops import (
     Stop,
     detect_stops,
     merge_nearby_stops,
+)
+from bhulan.analytics.trips import (
+    DEFAULT_TRIP_SPLIT_GAP_S,
+    DEFAULT_TRIP_SPLIT_STOP_S,
+    Trip,
+    detect_trips,
 )
 
 MS_TO_KMH = 3.6
@@ -58,6 +71,42 @@ class InsightsOptions(BaseModel):
             "populate StopOut.place_name. Respects Nominatim's 1 req/sec "
             "limit; expect +N seconds latency for N unique stops."
         ),
+    )
+    trip_split_stop_minutes: float = Field(
+        DEFAULT_TRIP_SPLIT_STOP_S / 60.0,
+        gt=0,
+        le=24 * 60,
+        description=(
+            "Stops longer than this end the current trip and start a new one. "
+            "Shorter stops stay inside the trip they happen during."
+        ),
+    )
+    trip_split_gap_minutes: float = Field(
+        DEFAULT_TRIP_SPLIT_GAP_S / 60.0,
+        gt=0,
+        le=7 * 24 * 60,
+        description=(
+            "A gap between consecutive samples longer than this ends the "
+            "current trip (device-off or missing data)."
+        ),
+    )
+    hotspot_grid_m: float = Field(
+        DEFAULT_HOTSPOT_GRID_M,
+        gt=0,
+        le=10_000,
+        description="Grid cell size (meters) used for hotspot clustering.",
+    )
+    hotspot_min_samples: int = Field(
+        DEFAULT_HOTSPOT_MIN_SAMPLES,
+        ge=1,
+        le=10_000,
+        description="Minimum samples per grid cell to qualify as a hotspot.",
+    )
+    hotspot_max_results: int = Field(
+        DEFAULT_HOTSPOT_MAX_RESULTS,
+        ge=1,
+        le=100,
+        description="Maximum number of hotspots returned, sorted by sample count desc.",
     )
 
 
@@ -125,6 +174,52 @@ class SegmentOut(BaseModel):
     avg_speed_kmh: float
 
 
+class TripOut(BaseModel):
+    """One detected trip with derived mobility stats.
+
+    Timestamps are ``None`` when the underlying samples carried none;
+    everything else is zero-safe so the UI can render without guarding.
+    """
+
+    index: int = Field(..., description="0-based index of the trip in start order")
+    start_ts: Optional[datetime]
+    end_ts: Optional[datetime]
+    start_lat: float
+    start_lon: float
+    end_lat: float
+    end_lon: float
+    distance_km: float
+    duration_min: float
+    moving_time_min: float
+    idle_time_min: float
+    max_speed_kmh: float
+    sample_count: int
+
+
+class HotspotOut(BaseModel):
+    """One detected density cluster.
+
+    ``time_spent_min`` is ``None`` when the input has no timestamps —
+    we can still identify the hotspot geographically, we just can't
+    say how long was spent there.
+    """
+
+    lat: float
+    lon: float
+    sample_count: int
+    visit_count: int
+    time_spent_min: Optional[float]
+    first_ts: Optional[datetime]
+    last_ts: Optional[datetime]
+    place_name: Optional[str] = Field(
+        None,
+        description=(
+            "Reverse-geocoded label for the centroid. Only populated when "
+            "InsightsOptions.geocode_stops is true."
+        ),
+    )
+
+
 class InsightsQuality(BaseModel):
     rejected_points: int = 0
     issues: List[str] = Field(default_factory=list)
@@ -134,6 +229,8 @@ class InsightsReport(BaseModel):
     summary: InsightsSummary
     stops: List[StopOut]
     segments: List[SegmentOut]
+    trips: List[TripOut] = Field(default_factory=list)
+    hotspots: List[HotspotOut] = Field(default_factory=list)
     quality: InsightsQuality
 
 
@@ -160,6 +257,39 @@ def _stop_to_out(s: Stop) -> StopOut:
         duration_min=round(s.duration_s / 60.0, 3),
         radius_m=round(s.radius_m, 2),
         sample_count=s.sample_count,
+    )
+
+
+def _trip_to_out(index: int, t: Trip) -> TripOut:
+    max_kmh = t.max_speed_mps * MS_TO_KMH
+    return TripOut(
+        index=index,
+        start_ts=t.start_ts,
+        end_ts=t.end_ts,
+        start_lat=t.start_lat,
+        start_lon=t.start_lon,
+        end_lat=t.end_lat,
+        end_lon=t.end_lon,
+        distance_km=round(t.distance_m / 1000.0, 4),
+        duration_min=round(t.duration_s / 60.0, 3),
+        moving_time_min=round(t.moving_s / 60.0, 3),
+        idle_time_min=round(t.idle_s / 60.0, 3),
+        max_speed_kmh=round(max_kmh, 3),
+        sample_count=t.sample_count,
+    )
+
+
+def _hotspot_to_out(h: Hotspot) -> HotspotOut:
+    return HotspotOut(
+        lat=h.lat,
+        lon=h.lon,
+        sample_count=h.sample_count,
+        visit_count=h.visit_count,
+        time_spent_min=(
+            round(h.time_spent_s / 60.0, 3) if h.time_spent_s is not None else None
+        ),
+        first_ts=h.first_ts,
+        last_ts=h.last_ts,
     )
 
 
@@ -199,13 +329,27 @@ async def compute_insights_with_geocoding(
     # Local import to avoid httpx cost when geocoding is off.
     from bhulan.analytics.geocoding import reverse_geocode_stops
 
-    coords = [(s.lat, s.lon) for s in report.stops]
-    names = await reverse_geocode_stops(coords)
-    enriched = [
+    # Geocode stops AND hotspots in a single batched call so the
+    # Nominatim throttle (~1 req/sec) amortizes across both. The cache
+    # inside ``reverse_geocode_stops`` dedupes coordinate repeats at
+    # ~11 m precision, so if a stop and a hotspot share a centroid the
+    # second lookup is free.
+    stop_coords = [(s.lat, s.lon) for s in report.stops]
+    hotspot_coords = [(h.lat, h.lon) for h in report.hotspots]
+    all_names = await reverse_geocode_stops(stop_coords + hotspot_coords)
+    stop_names = all_names[: len(stop_coords)]
+    hotspot_names = all_names[len(stop_coords) :]
+    enriched_stops = [
         s.model_copy(update={"place_name": name})
-        for s, name in zip(report.stops, names)
+        for s, name in zip(report.stops, stop_names)
     ]
-    return report.model_copy(update={"stops": enriched})
+    enriched_hotspots = [
+        h.model_copy(update={"place_name": name})
+        for h, name in zip(report.hotspots, hotspot_names)
+    ]
+    return report.model_copy(
+        update={"stops": enriched_stops, "hotspots": enriched_hotspots}
+    )
 
 
 def compute_insights(request: InsightsRequest) -> InsightsReport:
@@ -234,6 +378,8 @@ def compute_insights(request: InsightsRequest) -> InsightsReport:
             ),
             stops=[],
             segments=[],
+            trips=[],
+            hotspots=[],
             quality=quality,
         )
 
@@ -250,6 +396,21 @@ def compute_insights(request: InsightsRequest) -> InsightsReport:
         min_duration_s=opts.min_stop_minutes * 60.0,
     )
     stops = merge_nearby_stops(raw_stops, merge_radius_m=opts.merge_stops_within_m)
+
+    # Trips use the already-detected stops as split candidates so we
+    # don't re-cluster the same points.
+    trips = detect_trips(
+        prepared,
+        stops=stops,
+        trip_split_stop_seconds=opts.trip_split_stop_minutes * 60.0,
+        trip_split_gap_seconds=opts.trip_split_gap_minutes * 60.0,
+    )
+    hotspots = detect_hotspots(
+        prepared,
+        grid_m=opts.hotspot_grid_m,
+        min_samples=opts.hotspot_min_samples,
+        max_results=opts.hotspot_max_results,
+    )
 
     moving_secs = sum(s.duration_s for s in segments if s.kind == "moving")
     idle_secs = sum(s.duration_s for s in segments if s.kind == "stopped")
@@ -277,5 +438,7 @@ def compute_insights(request: InsightsRequest) -> InsightsReport:
         summary=summary,
         stops=[_stop_to_out(s) for s in stops],
         segments=[_segment_to_out(s) for s in segments],
+        trips=[_trip_to_out(i, t) for i, t in enumerate(trips)],
+        hotspots=[_hotspot_to_out(h) for h in hotspots],
         quality=quality,
     )

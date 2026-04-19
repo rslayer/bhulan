@@ -11,6 +11,11 @@ export interface InsightsOptions {
   moving_speed_kmh?: number;
   merge_stops_within_m?: number | null;
   geocode_stops?: boolean;
+  trip_split_stop_minutes?: number;
+  trip_split_gap_minutes?: number;
+  hotspot_grid_m?: number;
+  hotspot_min_samples?: number;
+  hotspot_max_results?: number;
 }
 
 export interface TimeRange {
@@ -57,6 +62,33 @@ export interface SegmentOut {
   avg_speed_kmh: number | null;
 }
 
+export interface TripOut {
+  index: number;
+  start_ts: string | null;
+  end_ts: string | null;
+  start_lat: number;
+  start_lon: number;
+  end_lat: number;
+  end_lon: number;
+  distance_km: number;
+  duration_min: number;
+  moving_time_min: number;
+  idle_time_min: number;
+  max_speed_kmh: number;
+  sample_count: number;
+}
+
+export interface HotspotOut {
+  lat: number;
+  lon: number;
+  sample_count: number;
+  visit_count: number;
+  time_spent_min: number | null;
+  first_ts: string | null;
+  last_ts: string | null;
+  place_name?: string | null;
+}
+
 export interface QualityReport {
   rejected_points: number;
   issues: string[];
@@ -66,7 +98,26 @@ export interface InsightsReport {
   summary: InsightsSummary;
   stops: StopOut[];
   segments: SegmentOut[];
+  trips: TripOut[];
+  hotspots: HotspotOut[];
   quality: QualityReport;
+}
+
+export interface CompareTrackInput {
+  label?: string;
+  points?: Point[];
+  text?: string;
+}
+
+export interface CompareTrackResult {
+  label: string;
+  report: InsightsReport;
+  points: Point[];
+}
+
+export interface CompareResponse {
+  tracks: CompareTrackResult[];
+  shared_hotspots: HotspotOut[];
 }
 
 export interface PlotResponse {
@@ -107,6 +158,13 @@ export function validatePlot(
   input: { points?: Point[]; text?: string },
 ): Promise<PlotResponse> {
   return postJSON("/v1/plot/validate", input);
+}
+
+export function compareTracks(input: {
+  tracks: CompareTrackInput[];
+  options?: InsightsOptions;
+}): Promise<CompareResponse> {
+  return postJSON("/v1/compare", input);
 }
 
 export interface ParseFileResponse {
