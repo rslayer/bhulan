@@ -143,6 +143,14 @@ def _segment_kmh_window(
         if v > max_v:
             max_v = v
 
+    # Also check the first sample's device-reported speed — the loop
+    # above only inspects ``points[i + 1]``, so ``points[start]`` is
+    # never visited. For single-sample trips (start == end) the loop
+    # body doesn't run at all, making this the only speed source.
+    first_reported = points[start].speed_mps
+    if first_reported is not None and first_reported > max_v:
+        max_v = float(first_reported)
+
     return dist, duration, moving, max_v
 
 

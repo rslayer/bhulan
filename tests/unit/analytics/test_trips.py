@@ -149,3 +149,42 @@ def test_defaults_are_reasonable():
     # haven't drifted from the general-audience UX choice.
     assert DEFAULT_TRIP_SPLIT_STOP_S == 30 * 60.0
     assert DEFAULT_TRIP_SPLIT_GAP_S == 60 * 60.0
+
+
+def test_single_sample_trip_reports_device_speed():
+    # Regression: per-trip _segment_kmh_window only inspected points[i+1]'s
+    # device-reported speed, so a 1-sample trip (loop body never runs)
+    # always reported max_speed_mps=0 even when the sample carried a
+    # non-zero device speed. Build a 2-trip track where a 90-min gap
+    # isolates a single fast sample as its own trip.
+    base = _straight_line(3)
+    # Lone fast sample 120 min later with a device speed of 40 m/s.
+    isolated = TrackSample(
+        lat=12.98, lon=77.59,
+        ts_utc=datetime(2025, 1, 1, 9, 0, 0, tzinfo=timezone.utc)
+        + timedelta(minutes=120),
+        speed_mps=40.0,
+    )
+    trips = detect_trips(base + [isolated], stops=[])
+    assert len(trips) == 2
+    # The second trip has exactly one sample — its max speed must come
+    # from that sample's device-reported speed, not be 0.
+    assert trips[1].sample_count == 1
+    assert trips[1].max_speed_mps == pytest.approx(40.0)
+
+
+def test_first_sample_device_speed_counts_in_multi_sample_trip():
+    # Multi-sample variant of the same bug: points[start].speed_mps was
+    # never checked, so if only the first sample carried a high device
+    # speed, it would be ignored.
+    start = TrackSample(
+        lat=12.97, lon=77.59,
+        ts_utc=datetime(2025, 1, 1, 9, 0, 0, tzinfo=timezone.utc),
+        speed_mps=50.0,
+    )
+    rest = _straight_line(4, start_min=1.0)
+    trips = detect_trips([start] + rest, stops=[])
+    assert len(trips) == 1
+    # Per-step derived speed across the rest is ~1.85 m/s. If the first
+    # sample's device speed were ignored, max would be ~1.85 not 50.
+    assert trips[0].max_speed_mps == pytest.approx(50.0)
