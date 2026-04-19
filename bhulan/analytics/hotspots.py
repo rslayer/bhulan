@@ -125,11 +125,17 @@ def _time_spent_s(
 ) -> Optional[float]:
     """Sum inter-sample durations inside a cluster. ``None`` if no
     timestamps are available.
+
+    Only consecutive sample pairs that BOTH belong to the cluster count —
+    otherwise the last sample of a cluster would bleed its ``dt`` into
+    the next (often far-away) non-cluster sample, over-counting by hours
+    on multi-day pooled compare inputs.
     """
+    index_set = set(sorted_indices)
     total = 0.0
     saw_ts = False
     for i in sorted_indices:
-        if i + 1 >= len(points):
+        if (i + 1) not in index_set:
             continue
         a = points[i].ts_utc
         b = points[i + 1].ts_utc
