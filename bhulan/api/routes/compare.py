@@ -15,7 +15,7 @@ without a per-track option grid.
 from typing import List, Optional, Tuple
 
 from fastapi import APIRouter, Body, HTTPException, Request
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, ValidationError, field_validator
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
@@ -145,7 +145,19 @@ async def compare_endpoint(
 
     for idx, track in enumerate(payload.tracks):
         points, label = _track_to_points(track, idx)
-        req = InsightsRequest(points=points, options=payload.options)
+        # ``InsightsRequest`` runs a per-track point cap validator. We
+        # build the model manually here (not via FastAPI body binding),
+        # so a cap violation would surface as an unhandled
+        # pydantic.ValidationError → 500. Convert to a 422 with a
+        # track-scoped message so the UI can show "Track X is too big"
+        # instead of "server error".
+        try:
+            req = InsightsRequest(points=points, options=payload.options)
+        except ValidationError as e:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Track '{label}': {e.errors()[0].get('msg', str(e))}",
+            ) from e
         report = await compute_insights_with_geocoding(req)
         per_track.append(
             CompareTrackResult(label=label, report=report, points=points)
