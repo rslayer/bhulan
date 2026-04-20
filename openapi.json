@@ -132,6 +132,48 @@
         }
       }
     },
+    "/v1/compare": {
+      "post": {
+        "tags": [
+          "compare"
+        ],
+        "summary": "Compare Endpoint",
+        "description": "Compare 2+ tracks side by side.\n\nApplies the same ``options`` to every track so users don't have to\ntune knobs per-track. The response is a list of per-track reports\nplus a pooled-hotspot list so the UI can render \"shared places\"\nseparately from per-track breakdowns.",
+        "operationId": "compare_endpoint_v1_compare_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompareRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompareResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/healthz": {
       "get": {
         "tags": [
@@ -411,6 +453,126 @@
         ],
         "title": "Body_parse_file_endpoint_v1_parse_file_post"
       },
+      "CompareRequest": {
+        "properties": {
+          "tracks": {
+            "items": {
+              "$ref": "#/components/schemas/CompareTrack"
+            },
+            "type": "array",
+            "title": "Tracks",
+            "description": "2+ tracks to compare"
+          },
+          "options": {
+            "$ref": "#/components/schemas/InsightsOptions"
+          }
+        },
+        "type": "object",
+        "required": [
+          "tracks"
+        ],
+        "title": "CompareRequest",
+        "description": "Request body for :func:`compare_endpoint`."
+      },
+      "CompareResponse": {
+        "properties": {
+          "tracks": {
+            "items": {
+              "$ref": "#/components/schemas/CompareTrackResult"
+            },
+            "type": "array",
+            "title": "Tracks"
+          },
+          "shared_hotspots": {
+            "items": {
+              "$ref": "#/components/schemas/HotspotOut"
+            },
+            "type": "array",
+            "title": "Shared Hotspots",
+            "description": "Hotspots computed across all tracks' pooled samples."
+          }
+        },
+        "type": "object",
+        "required": [
+          "tracks"
+        ],
+        "title": "CompareResponse",
+        "description": "Top-level compare response."
+      },
+      "CompareTrack": {
+        "properties": {
+          "label": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label",
+            "description": "Short human-readable name (e.g. 'Monday run'). Optional."
+          },
+          "points": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/PointIn"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Points",
+            "description": "Pre-structured points (preferred when the client can parse)."
+          },
+          "text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text",
+            "description": "Raw coordinates (CSV, JSON, GeoJSON, or lat/lon lines)."
+          }
+        },
+        "type": "object",
+        "title": "CompareTrack",
+        "description": "One input track for ``POST /v1/compare``."
+      },
+      "CompareTrackResult": {
+        "properties": {
+          "label": {
+            "type": "string",
+            "title": "Label",
+            "description": "Either the caller-supplied label or a generated one"
+          },
+          "report": {
+            "$ref": "#/components/schemas/InsightsReport"
+          },
+          "points": {
+            "items": {
+              "$ref": "#/components/schemas/PointIn"
+            },
+            "type": "array",
+            "title": "Points",
+            "description": "Normalized points for this track, ready to drop onto a map."
+          }
+        },
+        "type": "object",
+        "required": [
+          "label",
+          "report"
+        ],
+        "title": "CompareTrackResult",
+        "description": "Per-track slice of the compare response."
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -423,6 +585,85 @@
         },
         "type": "object",
         "title": "HTTPValidationError"
+      },
+      "HotspotOut": {
+        "properties": {
+          "lat": {
+            "type": "number",
+            "title": "Lat"
+          },
+          "lon": {
+            "type": "number",
+            "title": "Lon"
+          },
+          "sample_count": {
+            "type": "integer",
+            "title": "Sample Count"
+          },
+          "visit_count": {
+            "type": "integer",
+            "title": "Visit Count"
+          },
+          "time_spent_min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Time Spent Min"
+          },
+          "first_ts": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Ts"
+          },
+          "last_ts": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Ts"
+          },
+          "place_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Place Name",
+            "description": "Reverse-geocoded label for the centroid. Only populated when InsightsOptions.geocode_stops is true."
+          }
+        },
+        "type": "object",
+        "required": [
+          "lat",
+          "lon",
+          "sample_count",
+          "visit_count",
+          "time_spent_min",
+          "first_ts",
+          "last_ts"
+        ],
+        "title": "HotspotOut",
+        "description": "One detected density cluster.\n\n``time_spent_min`` is ``None`` when the input has no timestamps \u2014\nwe can still identify the hotspot geographically, we just can't\nsay how long was spent there."
       },
       "InsightsOptions": {
         "properties": {
@@ -468,6 +709,46 @@
             "title": "Geocode Stops",
             "description": "If true, reverse-geocode each stop's centroid via Nominatim and populate StopOut.place_name. Respects Nominatim's 1 req/sec limit; expect +N seconds latency for N unique stops.",
             "default": false
+          },
+          "trip_split_stop_minutes": {
+            "type": "number",
+            "maximum": 1440.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Trip Split Stop Minutes",
+            "description": "Stops longer than this end the current trip and start a new one. Shorter stops stay inside the trip they happen during.",
+            "default": 30.0
+          },
+          "trip_split_gap_minutes": {
+            "type": "number",
+            "maximum": 10080.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Trip Split Gap Minutes",
+            "description": "A gap between consecutive samples longer than this ends the current trip (device-off or missing data).",
+            "default": 60.0
+          },
+          "hotspot_grid_m": {
+            "type": "number",
+            "maximum": 10000.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Hotspot Grid M",
+            "description": "Grid cell size (meters) used for hotspot clustering.",
+            "default": 100.0
+          },
+          "hotspot_min_samples": {
+            "type": "integer",
+            "maximum": 10000.0,
+            "minimum": 1.0,
+            "title": "Hotspot Min Samples",
+            "description": "Minimum samples per grid cell to qualify as a hotspot.",
+            "default": 5
+          },
+          "hotspot_max_results": {
+            "type": "integer",
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Hotspot Max Results",
+            "description": "Maximum number of hotspots returned, sorted by sample count desc.",
+            "default": 10
           }
         },
         "type": "object",
@@ -510,6 +791,20 @@
             },
             "type": "array",
             "title": "Segments"
+          },
+          "trips": {
+            "items": {
+              "$ref": "#/components/schemas/TripOut"
+            },
+            "type": "array",
+            "title": "Trips"
+          },
+          "hotspots": {
+            "items": {
+              "$ref": "#/components/schemas/HotspotOut"
+            },
+            "type": "array",
+            "title": "Hotspots"
           },
           "quality": {
             "$ref": "#/components/schemas/InsightsQuality"
@@ -947,6 +1242,97 @@
           "end"
         ],
         "title": "TimeRange"
+      },
+      "TripOut": {
+        "properties": {
+          "index": {
+            "type": "integer",
+            "title": "Index",
+            "description": "0-based index of the trip in start order"
+          },
+          "start_ts": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Ts"
+          },
+          "end_ts": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Ts"
+          },
+          "start_lat": {
+            "type": "number",
+            "title": "Start Lat"
+          },
+          "start_lon": {
+            "type": "number",
+            "title": "Start Lon"
+          },
+          "end_lat": {
+            "type": "number",
+            "title": "End Lat"
+          },
+          "end_lon": {
+            "type": "number",
+            "title": "End Lon"
+          },
+          "distance_km": {
+            "type": "number",
+            "title": "Distance Km"
+          },
+          "duration_min": {
+            "type": "number",
+            "title": "Duration Min"
+          },
+          "moving_time_min": {
+            "type": "number",
+            "title": "Moving Time Min"
+          },
+          "idle_time_min": {
+            "type": "number",
+            "title": "Idle Time Min"
+          },
+          "max_speed_kmh": {
+            "type": "number",
+            "title": "Max Speed Kmh"
+          },
+          "sample_count": {
+            "type": "integer",
+            "title": "Sample Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "index",
+          "start_ts",
+          "end_ts",
+          "start_lat",
+          "start_lon",
+          "end_lat",
+          "end_lon",
+          "distance_km",
+          "duration_min",
+          "moving_time_min",
+          "idle_time_min",
+          "max_speed_kmh",
+          "sample_count"
+        ],
+        "title": "TripOut",
+        "description": "One detected trip with derived mobility stats.\n\nTimestamps are ``None`` when the underlying samples carried none;\neverything else is zero-safe so the UI can render without guarding."
       },
       "ValidationError": {
         "properties": {

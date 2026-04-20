@@ -78,6 +78,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/compare": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Compare Endpoint
+         * @description Compare 2+ tracks side by side.
+         *
+         *     Applies the same ``options`` to every track so users don't have to
+         *     tune knobs per-track. The response is a list of per-track reports
+         *     plus a pooled-hotspot list so the UI can render "shared places"
+         *     separately from per-track breakdowns.
+         */
+        post: operations["compare_endpoint_v1_compare_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/healthz": {
         parameters: {
             query?: never;
@@ -248,10 +273,102 @@ export interface components {
              */
             file: string;
         };
+        /**
+         * CompareRequest
+         * @description Request body for :func:`compare_endpoint`.
+         */
+        CompareRequest: {
+            /**
+             * Tracks
+             * @description 2+ tracks to compare
+             */
+            tracks: components["schemas"]["CompareTrack"][];
+            options?: components["schemas"]["InsightsOptions"];
+        };
+        /**
+         * CompareResponse
+         * @description Top-level compare response.
+         */
+        CompareResponse: {
+            /** Tracks */
+            tracks: components["schemas"]["CompareTrackResult"][];
+            /**
+             * Shared Hotspots
+             * @description Hotspots computed across all tracks' pooled samples.
+             */
+            shared_hotspots?: components["schemas"]["HotspotOut"][];
+        };
+        /**
+         * CompareTrack
+         * @description One input track for ``POST /v1/compare``.
+         */
+        CompareTrack: {
+            /**
+             * Label
+             * @description Short human-readable name (e.g. 'Monday run'). Optional.
+             */
+            label?: string | null;
+            /**
+             * Points
+             * @description Pre-structured points (preferred when the client can parse).
+             */
+            points?: components["schemas"]["PointIn"][] | null;
+            /**
+             * Text
+             * @description Raw coordinates (CSV, JSON, GeoJSON, or lat/lon lines).
+             */
+            text?: string | null;
+        };
+        /**
+         * CompareTrackResult
+         * @description Per-track slice of the compare response.
+         */
+        CompareTrackResult: {
+            /**
+             * Label
+             * @description Either the caller-supplied label or a generated one
+             */
+            label: string;
+            report: components["schemas"]["InsightsReport"];
+            /**
+             * Points
+             * @description Normalized points for this track, ready to drop onto a map.
+             */
+            points?: components["schemas"]["PointIn"][];
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /**
+         * HotspotOut
+         * @description One detected density cluster.
+         *
+         *     ``time_spent_min`` is ``None`` when the input has no timestamps —
+         *     we can still identify the hotspot geographically, we just can't
+         *     say how long was spent there.
+         */
+        HotspotOut: {
+            /** Lat */
+            lat: number;
+            /** Lon */
+            lon: number;
+            /** Sample Count */
+            sample_count: number;
+            /** Visit Count */
+            visit_count: number;
+            /** Time Spent Min */
+            time_spent_min: number | null;
+            /** First Ts */
+            first_ts: string | null;
+            /** Last Ts */
+            last_ts: string | null;
+            /**
+             * Place Name
+             * @description Reverse-geocoded label for the centroid. Only populated when InsightsOptions.geocode_stops is true.
+             */
+            place_name?: string | null;
         };
         /**
          * InsightsOptions
@@ -286,6 +403,36 @@ export interface components {
              * @default false
              */
             geocode_stops: boolean;
+            /**
+             * Trip Split Stop Minutes
+             * @description Stops longer than this end the current trip and start a new one. Shorter stops stay inside the trip they happen during.
+             * @default 30
+             */
+            trip_split_stop_minutes: number;
+            /**
+             * Trip Split Gap Minutes
+             * @description A gap between consecutive samples longer than this ends the current trip (device-off or missing data).
+             * @default 60
+             */
+            trip_split_gap_minutes: number;
+            /**
+             * Hotspot Grid M
+             * @description Grid cell size (meters) used for hotspot clustering.
+             * @default 100
+             */
+            hotspot_grid_m: number;
+            /**
+             * Hotspot Min Samples
+             * @description Minimum samples per grid cell to qualify as a hotspot.
+             * @default 5
+             */
+            hotspot_min_samples: number;
+            /**
+             * Hotspot Max Results
+             * @description Maximum number of hotspots returned, sorted by sample count desc.
+             * @default 10
+             */
+            hotspot_max_results: number;
         };
         /** InsightsQuality */
         InsightsQuality: {
@@ -304,6 +451,10 @@ export interface components {
             stops: components["schemas"]["StopOut"][];
             /** Segments */
             segments: components["schemas"]["SegmentOut"][];
+            /** Trips */
+            trips?: components["schemas"]["TripOut"][];
+            /** Hotspots */
+            hotspots?: components["schemas"]["HotspotOut"][];
             quality: components["schemas"]["InsightsQuality"];
         };
         /** InsightsSummary */
@@ -487,6 +638,44 @@ export interface components {
              */
             end: string;
         };
+        /**
+         * TripOut
+         * @description One detected trip with derived mobility stats.
+         *
+         *     Timestamps are ``None`` when the underlying samples carried none;
+         *     everything else is zero-safe so the UI can render without guarding.
+         */
+        TripOut: {
+            /**
+             * Index
+             * @description 0-based index of the trip in start order
+             */
+            index: number;
+            /** Start Ts */
+            start_ts: string | null;
+            /** End Ts */
+            end_ts: string | null;
+            /** Start Lat */
+            start_lat: number;
+            /** Start Lon */
+            start_lon: number;
+            /** End Lat */
+            end_lat: number;
+            /** End Lon */
+            end_lon: number;
+            /** Distance Km */
+            distance_km: number;
+            /** Duration Min */
+            duration_min: number;
+            /** Moving Time Min */
+            moving_time_min: number;
+            /** Idle Time Min */
+            idle_time_min: number;
+            /** Max Speed Kmh */
+            max_speed_kmh: number;
+            /** Sample Count */
+            sample_count: number;
+        };
         /** ValidationError */
         ValidationError: {
             /** Location */
@@ -591,6 +780,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PlotResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    compare_endpoint_v1_compare_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CompareRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompareResponse"];
                 };
             };
             /** @description Validation Error */

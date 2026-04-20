@@ -15,6 +15,10 @@ interface Options {
   min_stop_minutes: number;
   moving_speed_kmh: number;
   geocode_stops: boolean;
+  /** Optional \u2014 only ever set via a share URL today since the UI
+   * doesn't expose it. Threaded to ``HotspotsList`` so the \"grid ~N m\"
+   * label matches the backend's actual grid. */
+  hotspot_grid_m?: number;
 }
 
 const DEFAULT_OPTIONS: Options = {
@@ -189,7 +193,7 @@ export function InsightsPage() {
           </CardContent>
         </Card>
         {report ? (
-          <InsightsPanel report={report} />
+          <InsightsPanel report={report} hotspotGridM={options.hotspot_grid_m} />
         ) : (
           <Card>
             <CardContent className="py-10 text-center text-sm text-slate-500">

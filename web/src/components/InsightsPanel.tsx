@@ -1,4 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { HotspotsList } from "@/components/HotspotsList";
+import { TripsList } from "@/components/TripsList";
 import type { InsightsReport } from "@/lib/api";
 import { formatMinutes, formatNumber } from "@/lib/utils";
 import {
@@ -13,6 +15,9 @@ import {
 
 interface Props {
   report: InsightsReport;
+  /** Pass-through to HotspotsList so the "grid ~N m" label reflects the
+   * actual setting when the caller tuned ``hotspot_grid_m``. */
+  hotspotGridM?: number;
 }
 
 interface StatProps {
@@ -44,7 +49,7 @@ function fmtTs(iso: string | null | undefined): string {
   return d.toLocaleString();
 }
 
-export function InsightsPanel({ report }: Props) {
+export function InsightsPanel({ report, hotspotGridM }: Props) {
   const s = report.summary;
 
   return (
@@ -128,6 +133,9 @@ export function InsightsPanel({ report }: Props) {
           )}
         </CardContent>
       </Card>
+
+      <TripsList trips={report.trips ?? []} />
+      <HotspotsList hotspots={report.hotspots ?? []} gridM={hotspotGridM} />
 
       {report.quality.issues.length > 0 && (
         <Card className="border-amber-300 bg-amber-50">

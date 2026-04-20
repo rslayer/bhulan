@@ -15,6 +15,7 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
+from bhulan.api.routes.compare import router as compare_router
 from bhulan.api.routes.insights import router as insights_router
 from bhulan.config.settings import settings
 from bhulan.ingestion.normalize import normalize_batch
@@ -56,6 +57,7 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.include_router(insights_router)
+app.include_router(compare_router)
 
 
 @app.get("/v1/healthz", tags=["insights"])
