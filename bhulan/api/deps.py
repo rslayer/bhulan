@@ -60,11 +60,17 @@ def current_user_optional(
 
     Used on ``/v1/insights`` so anonymous callers still get their report
     but authenticated callers also get the side effect of having the run
-    saved to their history.
+    saved to their history. We swallow every exception (including
+    ``sqlite3.OperationalError`` when the auth DB schema is unavailable)
+    because the docstring contract is "never raises" — ``/v1/insights``
+    is stateless and must keep working even if the auth sidecar is down.
     """
     if not _auth_enabled():
         return None
     token = _extract_bearer(authorization)
     if token is None:
         return None
-    return auth_service.user_for_session(settings.BHULAN_DB_PATH, token)
+    try:
+        return auth_service.user_for_session(settings.BHULAN_DB_PATH, token)
+    except Exception:
+        return None
