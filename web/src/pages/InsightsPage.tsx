@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { CoordinateInput } from "@/components/CoordinateInput";
 import { InsightsPanel } from "@/components/InsightsPanel";
 import { MapView } from "@/components/MapView";
+import { MapLayerToggle, type MapLayerMode } from "@/components/MapLayerToggle";
 import { ShareLinkButton } from "@/components/ShareLinkButton";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -28,6 +29,10 @@ const DEFAULT_OPTIONS: Options = {
   geocode_stops: false,
 };
 
+// See PlotPage for the rationale — above this threshold the per-sample
+// CircleMarker paint dominates and the map gets unusable.
+const HEATMAP_AUTO_THRESHOLD = 10000;
+
 export function InsightsPage() {
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(false);
@@ -36,6 +41,8 @@ export function InsightsPage() {
   const [points, setPoints] = useState<Point[]>([]);
   const [options, setOptions] = useState<Options>(DEFAULT_OPTIONS);
   const [showOptions, setShowOptions] = useState(false);
+  const [layerMode, setLayerMode] = useState<MapLayerMode>("markers");
+  const [layerTouched, setLayerTouched] = useState(false);
   const hydratedRef = useRef(false);
 
   // Hydrate from a share fragment (``#s=v1.…``) on first mount. Only
@@ -65,6 +72,9 @@ export function InsightsPage() {
       ]);
       setReport(rep);
       setPoints(plot.points);
+      if (!layerTouched && plot.points.length >= HEATMAP_AUTO_THRESHOLD) {
+        setLayerMode("heatmap");
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setReport(null);
@@ -185,11 +195,29 @@ export function InsightsPage() {
 
       <div className="flex flex-col gap-4 lg:col-span-3">
         <Card>
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0">
             <CardTitle>Map</CardTitle>
+            <MapLayerToggle
+              value={layerMode}
+              onChange={(m) => {
+                setLayerMode(m);
+                setLayerTouched(true);
+              }}
+              disabled={points.length === 0}
+            />
           </CardHeader>
           <CardContent>
-            <MapView points={points} stops={report?.stops ?? []} />
+            <MapView
+              points={points}
+              stops={report?.stops ?? []}
+              layers={
+                layerMode === "heatmap"
+                  ? ["heatmap"]
+                  : layerMode === "both"
+                    ? ["lines", "markers", "heatmap"]
+                    : ["lines", "markers"]
+              }
+            />
           </CardContent>
         </Card>
         {report ? (
