@@ -40,12 +40,16 @@ def send_magic_link(
     magic_link: str,
     *,
     dev_mode: bool,
+    ttl_minutes: int = 15,
 ) -> bool:
     """Send the magic link. Returns True if an email was actually sent.
 
     When ``dev_mode`` is True or when no SMTP host is configured, the
     function logs the link and returns False. Callers can then decide to
     echo the link in the API response for local use.
+
+    ``ttl_minutes`` is interpolated into the user-facing email body so
+    changing ``BHULAN_MAGIC_LINK_TTL_MIN`` keeps the message accurate.
     """
     if dev_mode or not smtp.host:
         logger.info("[bhulan.auth] magic link for %s: %s", to_email, magic_link)
@@ -56,7 +60,8 @@ def send_magic_link(
     msg["From"] = smtp.from_addr
     msg["To"] = to_email
     msg.set_content(
-        "Click the link below to sign in to Bhulan. It expires in 15 minutes.\n\n"
+        "Click the link below to sign in to Bhulan. It expires in "
+        f"{ttl_minutes} minutes.\n\n"
         f"{magic_link}\n\n"
         "If you didn't request this, you can ignore this email."
     )

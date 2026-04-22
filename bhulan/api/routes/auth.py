@@ -112,6 +112,7 @@ def request_magic_link(
         email,
         link,
         dev_mode=settings.AUTH_DEV_MODE,
+        ttl_minutes=settings.BHULAN_MAGIC_LINK_TTL_MIN,
     )
 
     # Only leak the link in the response when the operator has explicitly
