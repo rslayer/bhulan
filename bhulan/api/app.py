@@ -41,10 +41,18 @@ def _parse_origins(raw: str) -> List[str]:
     return [o.strip() for o in raw.split(",") if o.strip()]
 
 
+_cors_origins = _parse_origins(settings.ALLOWED_ORIGINS)
+# Browsers reject the ``Access-Control-Allow-Origin: *`` +
+# ``Access-Control-Allow-Credentials: true`` combination, so auto-drop
+# credentials when origins is wildcard. The public ``/v1`` surface is
+# cookie-less anyway — credentials only matter for future auth additions,
+# which will ship a narrow origin list.
+_cors_allow_credentials = _cors_origins != ["*"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=_parse_origins(settings.ALLOWED_ORIGINS),
-    allow_credentials=True,
+    allow_origins=_cors_origins,
+    allow_credentials=_cors_allow_credentials,
     allow_methods=["*"],
     allow_headers=["*"],
 )
