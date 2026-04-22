@@ -45,10 +45,15 @@ export function PlotPage() {
       setAccepted(res.accepted);
       setRejected(res.rejected);
       setIssues(res.issues);
-      // Auto-switch to heatmap on very dense inputs unless the user has
-      // already picked a mode explicitly.
-      if (!layerTouched && res.points.length >= HEATMAP_AUTO_THRESHOLD) {
-        setLayerMode("heatmap");
+      // Auto-switch to the appropriate mode for the new dataset size
+      // unless the user has already picked a mode explicitly. This is
+      // two-directional: submitting a tiny track after a huge one flips
+      // back to Markers, otherwise the user would see 50 points as a
+      // heatmap they never chose.
+      if (!layerTouched) {
+        setLayerMode(
+          res.points.length >= HEATMAP_AUTO_THRESHOLD ? "heatmap" : "markers",
+        );
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));

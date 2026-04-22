@@ -72,8 +72,12 @@ export function InsightsPage() {
       ]);
       setReport(rep);
       setPoints(plot.points);
-      if (!layerTouched && plot.points.length >= HEATMAP_AUTO_THRESHOLD) {
-        setLayerMode("heatmap");
+      // Two-directional auto-switch — otherwise submitting a small
+      // track after a huge one leaves the user stuck on heatmap.
+      if (!layerTouched) {
+        setLayerMode(
+          plot.points.length >= HEATMAP_AUTO_THRESHOLD ? "heatmap" : "markers",
+        );
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
