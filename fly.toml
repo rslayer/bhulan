@@ -1,0 +1,19 @@
+app = "bhulan-oivuldkc"
+primary_region = "sjc"
+
+[build]
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ["app"]
+
+[processes]
+  app = "uvicorn bhulan.api.app:app --host 0.0.0.0 --port 8080"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
