@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import dataclasses
 import hashlib
+import hmac
 import json
 import logging
 import secrets
@@ -25,6 +26,7 @@ from dataclasses import dataclass
 from typing import Any, List, Optional
 
 from bhulan.auth.db import connect
+from bhulan.config.settings import settings
 
 logger = logging.getLogger(__name__)
 
@@ -43,9 +45,17 @@ def _now() -> int:
 
 
 def _hash_token(token: str) -> str:
-    """SHA-256 of the token (hex). Deterministic \u2014 we store it, then
-    re-derive it on each verify."""
-    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+    """Keyed HMAC-SHA256 of the token (hex). Deterministic \u2014 we store
+    it, then re-derive it on each verify.
+
+    The HMAC key is ``settings.BHULAN_AUTH_SECRET``. With a 256-bit
+    random token plain SHA-256 would already be unguessable, but keying
+    the hash is defense-in-depth: if an attacker only exfiltrates a DB
+    backup (not the secret), the stored hashes are useless, and rotating
+    ``BHULAN_AUTH_SECRET`` invalidates every outstanding session in one
+    move without touching the DB."""
+    key = settings.BHULAN_AUTH_SECRET.encode("utf-8")
+    return hmac.new(key, token.encode("utf-8"), hashlib.sha256).hexdigest()
 
 
 def generate_token() -> str:
