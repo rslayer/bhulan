@@ -9,7 +9,7 @@ suitable for driving a client-side map.
 
 from typing import List, Optional, Tuple
 
-from fastapi import APIRouter, Body, File, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Body, Depends, File, HTTPException, Request, UploadFile
 from pydantic import BaseModel, Field
 from slowapi import Limiter
 from slowapi.util import get_remote_address
@@ -23,6 +23,9 @@ from bhulan.analytics.insights import (
     compute_insights_with_geocoding,
 )
 from bhulan.analytics.parsers import ParseError, estimate_input_rows, parse_any
+from bhulan.api.deps import current_user_optional
+from bhulan.auth import service as auth_service
+from bhulan.auth.service import User
 from bhulan.config.settings import settings
 
 router = APIRouter(prefix="/v1", tags=["insights"])
@@ -63,6 +66,13 @@ class RawInsightsRequest(BaseModel):
     points: Optional[List[PointIn]] = None
     text: Optional[str] = None
     options: InsightsOptions = Field(default_factory=InsightsOptions)
+    # Optional human-readable label for the history entry. Ignored when the
+    # caller is anonymous.
+    label: Optional[str] = Field(
+        default=None,
+        description="Optional label stored alongside the history entry",
+        max_length=120,
+    )
 
 
 def _materialize_points(
@@ -84,11 +94,28 @@ def _materialize_points(
     return parsed, issues
 
 
+def _summarize_report_for_history(report: InsightsReport) -> dict:
+    """Compact projection of an InsightsReport for the history list view.
+
+    The full report can be multi-MB on big tracks; the list UI only ever
+    shows a handful of headline numbers. We persist the full request body
+    separately so "replay" can reconstruct the run exactly.
+    """
+    return {
+        "summary": report.summary.model_dump(mode="json"),
+        "quality": report.quality.model_dump(mode="json"),
+        "stop_count": len(report.stops),
+        "trip_count": len(report.trips),
+        "hotspot_count": len(report.hotspots),
+    }
+
+
 @router.post("/insights", response_model=InsightsReport)
 @limiter.limit(lambda: settings.RATE_LIMIT_INSIGHTS or "1000/second")
 async def insights_endpoint(
     request: Request,
     payload: RawInsightsRequest = Body(...),
+    user: Optional[User] = Depends(current_user_optional),
 ) -> InsightsReport:
     """
     Compute mobility insights for a batch of GPS coordinates.
@@ -97,12 +124,36 @@ async def insights_endpoint(
     that the server will parse using :func:`bhulan.analytics.parsers.parse_any`.
     Setting ``options.geocode_stops = true`` enriches each detected stop
     with a Nominatim-derived ``place_name`` (adds ~1s per unique stop).
+
+    When the caller is authenticated (``Authorization: Bearer <session>``)
+    and server-side auth is enabled, the run is also persisted to the
+    user's history — look it up with ``GET /v1/history``.
     """
     points, parse_issues = _materialize_points(payload.points, payload.text)
     req = InsightsRequest(points=points, options=payload.options)
     report = await compute_insights_with_geocoding(req)
     if parse_issues:
         report.quality.issues = list(report.quality.issues) + parse_issues
+
+    # Best-effort history write. Never fail the insights request because
+    # of a history persistence error — the user still gets their report.
+    if user is not None and settings.BHULAN_AUTH_ENABLED:
+        try:
+            auth_service.save_history(
+                settings.BHULAN_DB_PATH,
+                user_id=user.id,
+                kind="insights",
+                label=payload.label,
+                request_payload=payload.model_dump(mode="json"),
+                summary_payload=_summarize_report_for_history(report),
+            )
+        except Exception:
+            import logging
+
+            logging.getLogger(__name__).exception(
+                "Failed to persist history for user %s", user.id
+            )
+
     return report
 
 

@@ -17,3 +17,13 @@ primary_region = "sjc"
 [[vm]]
   size = "shared-cpu-1x"
   memory = "512mb"
+
+# Persistent volume for the opt-in user accounts + request history DB.
+# Auth stays off until BHULAN_AUTH_ENABLED=true is set and a volume named
+# "bhulan_data" is created (`flyctl volumes create bhulan_data --size 1`).
+# Without the volume the deploy still works — the API just ignores the
+# mount and the auth routes return 503.
+[mounts]
+  source = "bhulan_data"
+  destination = "/data"
+  initial_size = "1gb"
