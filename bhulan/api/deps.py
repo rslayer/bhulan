@@ -5,8 +5,6 @@ and ``routes/history``, plus a best-effort optional hook on
 ``routes/insights`` so anonymous requests continue to work.
 """
 
-from __future__ import annotations
-
 from typing import Optional
 
 from fastapi import Header, HTTPException, status

@@ -9,8 +9,6 @@
 - ``GET  /v1/auth/me``       — returns the current user, or 401.
 """
 
-from __future__ import annotations
-
 import logging
 import re
 from typing import Optional
@@ -104,17 +102,20 @@ async def request_magic_link(
     )
     link = build_magic_link_url(settings.FRONTEND_URL, token)
 
-    sent = send_magic_link(
+    send_magic_link(
         _smtp_config(),
         email,
         link,
         dev_mode=settings.AUTH_DEV_MODE,
     )
 
-    # In dev mode, return the link in the response so local testers can
-    # click through without SMTP. In production (dev_mode=False and SMTP
-    # configured) the link stays server-side only.
-    dev_link = link if (settings.AUTH_DEV_MODE or not sent) else None
+    # Only leak the link in the response when the operator has explicitly
+    # opted into dev mode. Previously we also leaked on SMTP failure, but
+    # that meant an attacker could request a link for any email and --
+    # if SMTP happened to be down -- sign in as that user. Failing closed
+    # is safer: the user just won't receive a link and we log the SMTP
+    # error server-side.
+    dev_link = link if settings.AUTH_DEV_MODE else None
     return AuthRequestResponse(ok=True, email=email, dev_magic_link=dev_link)
 
 

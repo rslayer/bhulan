@@ -89,12 +89,17 @@ export function AuthProvider({ children }: Props) {
         }
       }
 
-      if (tokenRef.current && !cancelled) {
+      // Only rehydrate via /auth/me when we DIDN'T just consume a magic
+      // link — verify() already returned the authoritative user. Calling
+      // /auth/me here would make a single transient network blip (server
+      // restart, cold start, etc.) wipe the session we just created, and
+      // the magic link is single-use so the user couldn't retry.
+      if (!magic && tokenRef.current && !cancelled) {
         try {
           const me = await authMe();
           if (!cancelled) setUser(me);
         } catch {
-          // Stale token \u2014 drop it silently.
+          // Stale token — drop it silently.
           tokenRef.current = null;
           clearStoredToken();
           if (!cancelled) setUser(null);

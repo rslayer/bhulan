@@ -6,9 +6,7 @@ History rows are created as a side effect of calls to ``/v1/insights``
 through the routes in this module.
 """
 
-from __future__ import annotations
-
-from typing import Any, List, Optional
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
@@ -36,7 +34,7 @@ class HistorySummary(BaseModel):
     created_at: int
     kind: str
     label: Optional[str] = None
-    summary: dict[str, Any] = Field(default_factory=dict)
+    summary: Dict[str, Any] = Field(default_factory=dict)
 
 
 class HistoryListResponse(BaseModel):
@@ -70,8 +68,8 @@ class HistoryDetail(BaseModel):
     created_at: int
     kind: str
     label: Optional[str] = None
-    request: Optional[dict[str, Any]] = None
-    summary: dict[str, Any] = Field(default_factory=dict)
+    request: Optional[Dict[str, Any]] = None
+    summary: Dict[str, Any] = Field(default_factory=dict)
 
 
 @router.get("/{entry_id}", response_model=HistoryDetail)
