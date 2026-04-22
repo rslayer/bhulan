@@ -63,10 +63,13 @@ class Settings(BaseSettings):
     # Public URL the magic link should point at. The backend composes
     # "{FRONTEND_URL}/#token=<magic>" and emails / logs that.
     FRONTEND_URL: str = "http://localhost:5173"
-    # When true (or when SMTP_HOST is unset), the magic-link token is logged
-    # to stdout AND returned in the /v1/auth/request response so a developer
-    # can copy it without running a mail server.
-    AUTH_DEV_MODE: bool = True
+    # When true, the magic-link token is logged to stdout AND returned in
+    # the /v1/auth/request response so a local developer can copy it
+    # without running a mail server. MUST stay false in production — if
+    # it's true, an attacker can request a link for any email and read
+    # the token straight out of the HTTP response. Opt in explicitly by
+    # setting AUTH_DEV_MODE=true in your local .env.
+    AUTH_DEV_MODE: bool = False
     # SMTP. All optional — if SMTP_HOST is unset, mail sending is skipped.
     SMTP_HOST: Optional[str] = None
     SMTP_PORT: int = 587

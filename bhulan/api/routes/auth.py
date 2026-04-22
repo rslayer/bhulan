@@ -84,10 +84,15 @@ class AuthRequestResponse(BaseModel):
     status_code=status.HTTP_202_ACCEPTED,
 )
 @limiter.limit(lambda: settings.RATE_LIMIT_AUTH or "10/minute")
-async def request_magic_link(
+def request_magic_link(
     request: Request,
     payload: AuthRequestBody = Body(...),
 ) -> AuthRequestResponse:
+    # Sync handler on purpose: send_magic_link() does blocking SMTP I/O
+    # with a 10s timeout. If this were `async def`, FastAPI would run it
+    # directly on the event loop and that SMTP round-trip would stall
+    # every other request. Plain `def` handlers get dispatched to the
+    # threadpool so the blocking socket is isolated to a worker.
     _require_auth_enabled()
     auth_db.init_db(settings.BHULAN_DB_PATH)
 
