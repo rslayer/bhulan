@@ -40,7 +40,7 @@ export function clearStoredToken(): void {
 export function extractAndClearMagicTokenFromHash(): string | null {
   const hash = window.location.hash || "";
   if (!hash) return null;
-  // ``#magic=<token>`` or ``?magic=<token>`` \u2014 tolerate both.
+  // ``#magic=<token>`` or ``?magic=<token>`` — tolerate both.
   const stripped = hash.replace(/^[#?]/, "");
   const params = new URLSearchParams(stripped);
   const token = params.get("magic");
