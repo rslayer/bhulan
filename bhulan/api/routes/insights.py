@@ -7,6 +7,7 @@ accept a list of GPS coordinates and return either a computed
 suitable for driving a client-side map.
 """
 
+import asyncio
 from typing import List, Optional, Tuple
 
 from fastapi import APIRouter, Body, Depends, File, HTTPException, Request, UploadFile
@@ -137,9 +138,12 @@ async def insights_endpoint(
 
     # Best-effort history write. Never fail the insights request because
     # of a history persistence error — the user still gets their report.
+    # ``save_history`` does blocking SQLite I/O so we push it to a thread
+    # rather than stall the event loop on every authenticated request.
     if user is not None and settings.BHULAN_AUTH_ENABLED:
         try:
-            auth_service.save_history(
+            await asyncio.to_thread(
+                auth_service.save_history,
                 settings.BHULAN_DB_PATH,
                 user_id=user.id,
                 kind="insights",

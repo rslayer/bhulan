@@ -137,7 +137,7 @@ class AuthVerifyResponse(BaseModel):
 
 @router.post("/verify", response_model=AuthVerifyResponse)
 @limiter.limit(lambda: settings.RATE_LIMIT_AUTH or "10/minute")
-async def verify_magic_link(
+def verify_magic_link(
     request: Request,
     payload: AuthVerifyBody = Body(...),
 ) -> AuthVerifyResponse:
@@ -165,7 +165,7 @@ class AuthLogoutResponse(BaseModel):
 
 
 @router.post("/logout", response_model=AuthLogoutResponse)
-async def logout(
+def logout(
     request: Request,
     _user: User = Depends(current_user_required),
 ) -> AuthLogoutResponse:
@@ -187,5 +187,8 @@ class MeResponse(BaseModel):
 
 
 @router.get("/me", response_model=MeResponse)
-async def me(user: User = Depends(current_user_required)) -> MeResponse:
+def me(user: User = Depends(current_user_required)) -> MeResponse:
+    # Plain ``def`` is fine here: current_user_required already does the
+    # SQLite lookup, so the handler body itself is trivial. Keeping it
+    # sync also matches the rest of the auth routes.
     return MeResponse(id=user.id, email=user.email, created_at=user.created_at)

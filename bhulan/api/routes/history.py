@@ -42,7 +42,7 @@ class HistoryListResponse(BaseModel):
 
 
 @router.get("", response_model=HistoryListResponse)
-async def list_history_endpoint(
+def list_history_endpoint(
     user: User = Depends(current_user_required),
     limit: int = Query(50, ge=1, le=200),
 ) -> HistoryListResponse:
@@ -73,7 +73,7 @@ class HistoryDetail(BaseModel):
 
 
 @router.get("/{entry_id}", response_model=HistoryDetail)
-async def get_history_entry(
+def get_history_entry(
     entry_id: int,
     user: User = Depends(current_user_required),
 ) -> HistoryDetail:
@@ -93,7 +93,7 @@ class HistoryDeleteResponse(BaseModel):
 
 
 @router.delete("/{entry_id}", response_model=HistoryDeleteResponse)
-async def delete_history_entry(
+def delete_history_entry(
     entry_id: int,
     user: User = Depends(current_user_required),
 ) -> HistoryDeleteResponse:
