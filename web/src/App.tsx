@@ -1,11 +1,14 @@
-import { useState } from "react";
-import { GitCompareArrows, Map, Sparkles } from "lucide-react";
+import { useEffect, useState } from "react";
+import { GitCompareArrows, History, Map, Sparkles } from "lucide-react";
+import { AuthProvider, useAuth } from "@/components/AuthProvider";
+import { UserMenu } from "@/components/UserMenu";
 import { ComparePage } from "@/pages/ComparePage";
+import { HistoryPage } from "@/pages/HistoryPage";
 import { InsightsPage } from "@/pages/InsightsPage";
 import { PlotPage } from "@/pages/PlotPage";
 import { cn } from "@/lib/utils";
 
-type Tab = "insights" | "plot" | "compare";
+type Tab = "insights" | "plot" | "compare" | "history";
 
 interface TabDef {
   id: Tab;
@@ -17,6 +20,7 @@ const TABS: TabDef[] = [
   { id: "insights", label: "Insights", icon: <Sparkles className="h-4 w-4" /> },
   { id: "plot", label: "Plot", icon: <Map className="h-4 w-4" /> },
   { id: "compare", label: "Compare", icon: <GitCompareArrows className="h-4 w-4" /> },
+  { id: "history", label: "History", icon: <History className="h-4 w-4" /> },
 ];
 
 function Tabs({ tab, onChange }: { tab: Tab; onChange: (t: Tab) => void }) {
@@ -41,8 +45,18 @@ function Tabs({ tab, onChange }: { tab: Tab; onChange: (t: Tab) => void }) {
   );
 }
 
-export default function App() {
+function AppShell() {
   const [tab, setTab] = useState<Tab>("insights");
+  const { user } = useAuth();
+
+  // Replay from the History tab lands on the Insights tab. HistoryPage
+  // writes the stored request to localStorage and dispatches the event;
+  // InsightsPage listens for the same event to rehydrate its state.
+  useEffect(() => {
+    const handler = () => setTab("insights");
+    window.addEventListener("bhulan:replay", handler);
+    return () => window.removeEventListener("bhulan:replay", handler);
+  }, []);
 
   return (
     <div className="min-h-full">
@@ -52,17 +66,31 @@ export default function App() {
             <div className="text-lg font-semibold">Bhulan</div>
             <div className="text-xs text-slate-500">GPS mobility insights &amp; plotting</div>
           </div>
-          <Tabs tab={tab} onChange={setTab} />
+          <div className="flex flex-wrap items-center gap-3">
+            <Tabs tab={tab} onChange={setTab} />
+            <UserMenu />
+          </div>
         </div>
       </header>
       <main className="mx-auto max-w-6xl px-4 py-6">
         {tab === "insights" && <InsightsPage />}
         {tab === "plot" && <PlotPage />}
         {tab === "compare" && <ComparePage />}
+        {tab === "history" && <HistoryPage />}
       </main>
       <footer className="mx-auto max-w-6xl px-4 py-8 text-xs text-slate-500">
-        All analysis runs against your bhulan backend — your data is never stored.
+        {user
+          ? "Signed in — your insights runs are saved to your history."
+          : "All analysis runs against your bhulan backend — sign in to save your history."}
       </footer>
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <AppShell />
+    </AuthProvider>
   );
 }

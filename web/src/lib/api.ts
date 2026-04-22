@@ -129,23 +129,64 @@ export interface PlotResponse {
 
 const BASE = (import.meta.env.VITE_BACKEND_URL as string | undefined) || "";
 
+// Pluggable auth-header provider. The auth layer registers a getter here at
+// module load so api.ts doesn't have to import the auth module (avoids a
+// circular dependency between the client and the React context that owns
+// the session token).
+let authHeaderProvider: (() => Record<string, string>) | null = null;
+
+export function registerAuthHeaderProvider(
+  provider: () => Record<string, string>,
+): void {
+  authHeaderProvider = provider;
+}
+
+function authHeaders(): Record<string, string> {
+  return authHeaderProvider ? authHeaderProvider() : {};
+}
+
+async function readError(res: Response): Promise<string> {
+  let msg = `${res.status} ${res.statusText}`;
+  try {
+    const data = await res.json();
+    if (data?.detail)
+      msg =
+        typeof data.detail === "string"
+          ? data.detail
+          : JSON.stringify(data.detail);
+  } catch {
+    // ignore
+  }
+  return msg;
+}
+
+async function request<T>(
+  path: string,
+  init: RequestInit & { body?: BodyInit | null } = {},
+): Promise<T> {
+  const headers = new Headers(init.headers);
+  const auth = authHeaders();
+  for (const [k, v] of Object.entries(auth)) headers.set(k, v);
+  const res = await fetch(`${BASE}${path}`, { ...init, headers });
+  if (!res.ok) throw new Error(await readError(res));
+  if (res.status === 204) return undefined as T;
+  return res.json() as Promise<T>;
+}
+
 async function postJSON<T>(path: string, body: unknown): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, {
+  return request<T>(path, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  if (!res.ok) {
-    let msg = `${res.status} ${res.statusText}`;
-    try {
-      const data = await res.json();
-      if (data?.detail) msg = typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail);
-    } catch {
-      // ignore
-    }
-    throw new Error(msg);
-  }
-  return res.json() as Promise<T>;
+}
+
+async function getJSON<T>(path: string): Promise<T> {
+  return request<T>(path, { method: "GET" });
+}
+
+async function delJSON<T>(path: string): Promise<T> {
+  return request<T>(path, { method: "DELETE" });
 }
 
 export function computeInsights(
@@ -178,21 +219,94 @@ export interface ParseFileResponse {
 export async function parseFile(file: File): Promise<ParseFileResponse> {
   const fd = new FormData();
   fd.append("file", file);
-  const res = await fetch(`${BASE}/v1/parse/file`, {
+  return request<ParseFileResponse>("/v1/parse/file", {
     method: "POST",
     body: fd,
   });
-  if (!res.ok) {
-    let msg = `${res.status} ${res.statusText}`;
-    try {
-      const data = await res.json();
-      if (data?.detail) msg = typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail);
-    } catch {
-      // ignore
-    }
-    throw new Error(msg);
-  }
-  return res.json() as Promise<ParseFileResponse>;
+}
+
+// --- Auth + history ---------------------------------------------------
+
+export interface CurrentUser {
+  id: number;
+  email: string;
+  created_at: number;
+}
+
+export interface AuthRequestResponse {
+  ok: boolean;
+  email: string;
+  dev_magic_link?: string | null;
+}
+
+export interface AuthVerifyResponse {
+  session_token: string;
+  expires_in_days: number;
+  user: CurrentUser;
+}
+
+export function authRequestLink(
+  email: string,
+): Promise<AuthRequestResponse> {
+  return postJSON("/v1/auth/request", { email });
+}
+
+export function authVerifyLink(token: string): Promise<AuthVerifyResponse> {
+  return postJSON("/v1/auth/verify", { token });
+}
+
+export function authMe(): Promise<CurrentUser> {
+  return getJSON("/v1/auth/me");
+}
+
+export function authLogout(): Promise<{ ok: boolean }> {
+  return postJSON("/v1/auth/logout", {});
+}
+
+export interface HistorySummaryEntry {
+  id: number;
+  created_at: number;
+  kind: string;
+  label: string | null;
+  summary: {
+    summary?: InsightsSummary;
+    quality?: QualityReport;
+    stop_count?: number;
+    trip_count?: number;
+    hotspot_count?: number;
+  };
+}
+
+export interface HistoryListResponse {
+  entries: HistorySummaryEntry[];
+}
+
+export interface HistoryDetail {
+  id: number;
+  created_at: number;
+  kind: string;
+  label: string | null;
+  request: {
+    points?: Point[];
+    text?: string;
+    options?: InsightsOptions;
+    label?: string | null;
+  } | null;
+  summary: HistorySummaryEntry["summary"];
+}
+
+export function listHistory(limit = 50): Promise<HistoryListResponse> {
+  return getJSON(`/v1/history?limit=${encodeURIComponent(limit)}`);
+}
+
+export function getHistoryEntry(id: number): Promise<HistoryDetail> {
+  return getJSON(`/v1/history/${id}`);
+}
+
+export function deleteHistoryEntry(
+  id: number,
+): Promise<{ ok: boolean; id: number }> {
+  return delJSON(`/v1/history/${id}`);
 }
 
 /**

@@ -15,8 +15,11 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
+from bhulan.api.routes.auth import router as auth_router
 from bhulan.api.routes.compare import router as compare_router
+from bhulan.api.routes.history import router as history_router
 from bhulan.api.routes.insights import router as insights_router
+from bhulan.auth import db as auth_db
 from bhulan.config.settings import settings
 from bhulan.ingestion.normalize import normalize_batch
 from bhulan.models.canonical import NormalizationResult
@@ -66,6 +69,24 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.include_router(insights_router)
 app.include_router(compare_router)
+app.include_router(auth_router)
+app.include_router(history_router)
+
+# Best-effort DB init at startup. The routes also call init_db() lazily so
+# tests can point at a tempfile without reimporting this module, but when
+# the feature is enabled on a real deploy we want the file + schema to
+# exist before the first request lands.
+if settings.BHULAN_AUTH_ENABLED:
+    try:
+        auth_db.init_db(settings.BHULAN_DB_PATH)
+    except Exception as exc:  # pragma: no cover - depends on FS perms
+        import logging
+
+        logging.getLogger(__name__).warning(
+            "Failed to initialize auth DB at %s: %s",
+            settings.BHULAN_DB_PATH,
+            exc,
+        )
 
 
 @app.get("/v1/healthz", tags=["insights"])
