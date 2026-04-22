@@ -54,6 +54,54 @@ export function InsightsPage() {
     }
   }, []);
 
+  // Replay from the History tab. HistoryPage stashes the stored /v1/insights
+  // request body in localStorage("bhulan.replay") and fires a
+  // "bhulan:replay" event; we consume that payload, rehydrate the form,
+  // then clear the localStorage key so future mounts don't re-replay.
+  useEffect(() => {
+    function consumeReplay() {
+      const raw = localStorage.getItem("bhulan.replay");
+      if (!raw) return;
+      try {
+        const parsed = JSON.parse(raw) as {
+          request?: { text?: string; points?: Point[]; options?: Partial<Options> };
+        };
+        const req = parsed?.request;
+        if (!req) return;
+        // Prefer raw text for display; fall back to re-serializing the
+        // structured points so the user sees what they're replaying.
+        if (typeof req.text === "string" && req.text.length > 0) {
+          setText(req.text);
+        } else if (Array.isArray(req.points) && req.points.length > 0) {
+          setText(
+              req.points
+                .map((p) =>
+                  p.ts_utc ? `${p.lat},${p.lon},${p.ts_utc}` : `${p.lat},${p.lon}`,
+                )
+                .join("\n"),
+          );
+        }
+        if (req.options) {
+          setOptions((prev) => ({ ...prev, ...(req.options as Partial<Options>) }));
+          setShowOptions(true);
+        }
+        setReport(null);
+        setPoints([]);
+        setError(null);
+      } catch {
+        // Malformed payload \u2014 nothing to do.
+      } finally {
+        localStorage.removeItem("bhulan.replay");
+      }
+    }
+
+    // Run once on mount in case we mount *after* the event was dispatched
+    // (e.g. the user was on another tab), then subscribe for live events.
+    consumeReplay();
+    window.addEventListener("bhulan:replay", consumeReplay);
+    return () => window.removeEventListener("bhulan:replay", consumeReplay);
+  }, []);
+
   async function run() {
     setLoading(true);
     setError(null);

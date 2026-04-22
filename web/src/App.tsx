@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { GitCompareArrows, History, Map, Sparkles } from "lucide-react";
 import { AuthProvider, useAuth } from "@/components/AuthProvider";
 import { UserMenu } from "@/components/UserMenu";
@@ -48,6 +48,15 @@ function Tabs({ tab, onChange }: { tab: Tab; onChange: (t: Tab) => void }) {
 function AppShell() {
   const [tab, setTab] = useState<Tab>("insights");
   const { user } = useAuth();
+
+  // Replay from the History tab lands on the Insights tab. HistoryPage
+  // writes the stored request to localStorage and dispatches the event;
+  // InsightsPage listens for the same event to rehydrate its state.
+  useEffect(() => {
+    const handler = () => setTab("insights");
+    window.addEventListener("bhulan:replay", handler);
+    return () => window.removeEventListener("bhulan:replay", handler);
+  }, []);
 
   return (
     <div className="min-h-full">
