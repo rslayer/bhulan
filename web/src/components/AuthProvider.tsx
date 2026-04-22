@@ -75,17 +75,29 @@ export function AuthProvider({ children }: Props) {
         setVerifying(true);
         try {
           const resp = await authVerifyLink(magic);
-          if (cancelled) return;
+          // Persist the session regardless of ``cancelled``: the server
+          // already consumed the magic link (single-use) and created the
+          // session, so bailing client-side would strand the user with no
+          // way to retry. We only guard React state setters below — those
+          // are safely idempotent when re-run after a StrictMode
+          // dev-mode remount because the token is now in localStorage
+          // and the next boot() hits the /auth/me rehydrate branch.
           tokenRef.current = resp.session_token;
           setStoredToken(resp.session_token);
-          setUser(resp.user);
+          if (!cancelled) setUser(resp.user);
         } catch (e) {
           if (!cancelled)
             setVerifyError(
               e instanceof Error ? e.message : "Could not verify magic link",
             );
         } finally {
-          if (!cancelled) setVerifying(false);
+          // Always clear the verifying flag. Previously this was guarded
+          // by !cancelled, which meant a StrictMode-triggered cleanup
+          // between request and response left the UI stuck on
+          // "Verifying link…" forever. React tolerates setState after
+          // unmount; in StrictMode's dev double-invoke the component
+          // isn't really unmounted, just remounted, so this is safe.
+          setVerifying(false);
         }
       }
 
