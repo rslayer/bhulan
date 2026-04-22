@@ -21,6 +21,10 @@ export interface paths {
          *     that the server will parse using :func:`bhulan.analytics.parsers.parse_any`.
          *     Setting ``options.geocode_stops = true`` enriches each detected stop
          *     with a Nominatim-derived ``place_name`` (adds ~1s per unique stop).
+         *
+         *     When the caller is authenticated (``Authorization: Bearer <session>``)
+         *     and server-side auth is enabled, the run is also persisted to the
+         *     user's history — look it up with ``GET /v1/history``.
          */
         post: operations["insights_endpoint_v1_insights_post"];
         delete?: never;
@@ -98,6 +102,109 @@ export interface paths {
          */
         post: operations["compare_endpoint_v1_compare_post"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/request": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Request Magic Link */
+        post: operations["request_magic_link_v1_auth_request_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Verify Magic Link */
+        post: operations["verify_magic_link_v1_auth_verify_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Logout */
+        post: operations["logout_v1_auth_logout_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Me */
+        get: operations["me_v1_auth_me_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List History Endpoint */
+        get: operations["list_history_endpoint_v1_history_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/history/{entry_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get History Entry */
+        get: operations["get_history_entry_v1_history__entry_id__get"];
+        put?: never;
+        post?: never;
+        /** Delete History Entry */
+        delete: operations["delete_history_entry_v1_history__entry_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -253,6 +360,61 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AuthLogoutResponse */
+        AuthLogoutResponse: {
+            /**
+             * Ok
+             * @default true
+             */
+            ok: boolean;
+        };
+        /** AuthRequestBody */
+        AuthRequestBody: {
+            /**
+             * Email
+             * @description Email to send the magic link to
+             */
+            email: string;
+        };
+        /**
+         * AuthRequestResponse
+         * @description Response to :func:`request_magic_link`.
+         *
+         *     ``dev_magic_link`` is only populated when the server is running with
+         *     ``AUTH_DEV_MODE=true`` (or without SMTP configured) so a developer can
+         *     copy the link without running a mail server. It's never set in
+         *     production.
+         */
+        AuthRequestResponse: {
+            /**
+             * Ok
+             * @default true
+             */
+            ok: boolean;
+            /** Email */
+            email: string;
+            /** Dev Magic Link */
+            dev_magic_link?: string | null;
+        };
+        /** AuthVerifyBody */
+        AuthVerifyBody: {
+            /**
+             * Token
+             * @description Magic-link token from the URL
+             */
+            token: string;
+        };
+        /** AuthVerifyResponse */
+        AuthVerifyResponse: {
+            /** Session Token */
+            session_token: string;
+            /** Expires In Days */
+            expires_in_days: number;
+            /** User */
+            user: {
+                [key: string]: unknown;
+            };
+        };
         /** BBox */
         BBox: {
             /** Min Lat */
@@ -340,6 +502,52 @@ export interface components {
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /** HistoryDeleteResponse */
+        HistoryDeleteResponse: {
+            /** Ok */
+            ok: boolean;
+            /** Id */
+            id: number;
+        };
+        /** HistoryDetail */
+        HistoryDetail: {
+            /** Id */
+            id: number;
+            /** Created At */
+            created_at: number;
+            /** Kind */
+            kind: string;
+            /** Label */
+            label?: string | null;
+            /** Request */
+            request?: {
+                [key: string]: unknown;
+            } | null;
+            /** Summary */
+            summary?: {
+                [key: string]: unknown;
+            };
+        };
+        /** HistoryListResponse */
+        HistoryListResponse: {
+            /** Entries */
+            entries: components["schemas"]["HistorySummary"][];
+        };
+        /** HistorySummary */
+        HistorySummary: {
+            /** Id */
+            id: number;
+            /** Created At */
+            created_at: number;
+            /** Kind */
+            kind: string;
+            /** Label */
+            label?: string | null;
+            /** Summary */
+            summary?: {
+                [key: string]: unknown;
+            };
         };
         /**
          * HotspotOut
@@ -476,6 +684,15 @@ export interface components {
             max_speed_kmh: number;
             bbox: components["schemas"]["BBox"] | null;
         };
+        /** MeResponse */
+        MeResponse: {
+            /** Id */
+            id: number;
+            /** Email */
+            email: string;
+            /** Created At */
+            created_at: number;
+        };
         /**
          * NormalizationResult
          * @description Result of normalizing a batch of GPS data.
@@ -581,6 +798,11 @@ export interface components {
             /** Text */
             text?: string | null;
             options?: components["schemas"]["InsightsOptions"];
+            /**
+             * Label
+             * @description Optional label stored alongside the history entry
+             */
+            label?: string | null;
         };
         /** SegmentOut */
         SegmentOut: {
@@ -697,7 +919,9 @@ export interface operations {
     insights_endpoint_v1_insights_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                authorization?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
@@ -813,6 +1037,233 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CompareResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    request_magic_link_v1_auth_request_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AuthRequestBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthRequestResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    verify_magic_link_v1_auth_verify_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AuthVerifyBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthVerifyResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    logout_v1_auth_logout_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthLogoutResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    me_v1_auth_me_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MeResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_history_endpoint_v1_history_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HistoryListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_history_entry_v1_history__entry_id__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                entry_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HistoryDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_history_entry_v1_history__entry_id__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                entry_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HistoryDeleteResponse"];
                 };
             };
             /** @description Validation Error */
