@@ -52,7 +52,7 @@ export function HistoryPage() {
   if (authLoading) {
     return (
       <div className="rounded-lg border border-slate-200 bg-white p-6 text-sm text-slate-500">
-        Loading\u2026
+        Loading…
       </div>
     );
   }
@@ -159,14 +159,14 @@ export function HistoryPage() {
                       {e.label || `Run #${e.id}`}
                     </div>
                     <div className="text-xs text-slate-500">
-                      {formatWhen(e.created_at)} \u00b7 kind: {e.kind}
+                      {formatWhen(e.created_at)} · kind: {e.kind}
                     </div>
                     <div className="text-xs text-slate-600">
                       {s
-                        ? `${s.accepted_point_count ?? 0} pts \u00b7 ` +
-                          `${Number(s.total_distance_km ?? 0).toFixed(2)} km \u00b7 ` +
-                          `${e.summary.stop_count ?? 0} stops \u00b7 ` +
-                          `${e.summary.trip_count ?? 0} trips \u00b7 ` +
+                        ? `${s.accepted_point_count ?? 0} pts · ` +
+                          `${Number(s.total_distance_km ?? 0).toFixed(2)} km · ` +
+                          `${e.summary.stop_count ?? 0} stops · ` +
+                          `${e.summary.trip_count ?? 0} trips · ` +
                           `${e.summary.hotspot_count ?? 0} hotspots`
                         : "summary unavailable"}
                     </div>

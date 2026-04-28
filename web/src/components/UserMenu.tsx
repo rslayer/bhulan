@@ -12,7 +12,7 @@ export function UserMenu() {
   if (loading || verifying) {
     return (
       <div className="text-xs text-slate-500">
-        {verifying ? "Verifying link\u2026" : "\u2026"}
+        {verifying ? "Verifying link…" : "…"}
       </div>
     );
   }
@@ -75,7 +75,7 @@ function LoginDialog({ onClose }: LoginDialogProps) {
       const resp = await authRequestLink(email.trim());
       setMsg(
         resp.dev_magic_link
-          ? "Dev mode \u2014 use the link below."
+          ? "Dev mode — use the link below."
           : `We sent a sign-in link to ${resp.email}. Check your inbox.`,
       );
       setDevLink(resp.dev_magic_link ?? null);
@@ -103,7 +103,7 @@ function LoginDialog({ onClose }: LoginDialogProps) {
         </div>
         <p className="mb-3 text-xs text-slate-500">
           We&rsquo;ll email you a one-time sign-in link. No passwords, no signup
-          form \u2014 your first link creates the account.
+          form — your first link creates the account.
         </p>
         <form onSubmit={onSubmit} className="flex flex-col gap-2">
           <input
@@ -127,7 +127,7 @@ function LoginDialog({ onClose }: LoginDialogProps) {
               Cancel
             </Button>
             <Button type="submit" size="sm" disabled={busy || !email.trim()}>
-              {busy ? "Sending\u2026" : "Send link"}
+              {busy ? "Sending…" : "Send link"}
             </Button>
           </div>
         </form>
