@@ -90,7 +90,11 @@ function LoginDialog({ onClose }: LoginDialogProps) {
     <div
       role="dialog"
       aria-modal="true"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4"
+      // ``z-[1000]`` (not ``z-50``): Leaflet's marker/tooltip/control panes
+      // run from z-index 400 to 800. A z-50 dialog would render *below* the
+      // map and its zoom controls, which actually happened on narrow
+      // viewports where the dialog overlapped the map card.
+      className="fixed inset-0 z-[1000] flex items-center justify-center bg-slate-900/40 p-4"
       onClick={onClose}
     >
       <div

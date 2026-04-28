@@ -25,12 +25,21 @@ const TABS: TabDef[] = [
 
 function Tabs({ tab, onChange }: { tab: Tab; onChange: (t: Tab) => void }) {
   return (
-    <div className="inline-flex items-center rounded-lg border border-slate-200 bg-white p-1 text-sm">
+    <div
+      role="tablist"
+      className="inline-flex items-center rounded-lg border border-slate-200 bg-white p-1 text-sm"
+    >
       {TABS.map((t) => (
         <button
           key={t.id}
+          role="tab"
+          aria-selected={tab === t.id}
+          aria-label={t.label}
+          title={t.label}
           className={cn(
-            "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5",
+            // Tighter horizontal padding on phones so all four tabs +
+            // the user menu fit on one line; full padding from sm.
+            "inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 sm:px-3",
             tab === t.id
               ? "bg-slate-900 text-white"
               : "text-slate-700 hover:bg-slate-100",
@@ -38,7 +47,9 @@ function Tabs({ tab, onChange }: { tab: Tab; onChange: (t: Tab) => void }) {
           onClick={() => onChange(t.id)}
         >
           {t.icon}
-          {t.label}
+          {/* Label is hidden on phones (icon-only tabs) but kept in
+              the accessibility tree via ``sr-only`` + ``aria-label``. */}
+          <span className="sr-only sm:not-sr-only">{t.label}</span>
         </button>
       ))}
     </div>

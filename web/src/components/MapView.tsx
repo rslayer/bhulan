@@ -95,7 +95,10 @@ export function MapView({
     : [20, 0];
 
   return (
-    <div className={className ?? "h-[520px] w-full"}>
+    // Default height shrinks on phones so the map doesn't push the
+    // Insights/Plot stats below the fold; the original 520 px kicks in
+    // from ``sm`` upward. Callers may pass ``className`` to override.
+    <div className={className ?? "h-[360px] w-full sm:h-[520px]"}>
       <MapContainer
         center={center}
         zoom={hasPoints ? 14 : 2}
