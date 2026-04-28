@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { FileUp, Trash2 } from "lucide-react";
 import { parseFile, pointsToCsv } from "@/lib/api";
+import { SAMPLES, type Sample } from "@/lib/samples";
 
 const PLACEHOLDER = `Paste coordinates — any of these formats work:
 
@@ -20,33 +21,22 @@ lat,lon,ts,speed
 12.971,77.594,2025-01-01T09:00:00Z,3.1
 ...`;
 
-const SAMPLE = `# Short walk around a block (meters-scale loop)
-12.9710,77.5940,2025-01-01T09:00:00Z
-12.9712,77.5942,2025-01-01T09:00:30Z
-12.9715,77.5945,2025-01-01T09:01:00Z
-12.9718,77.5948,2025-01-01T09:01:30Z
-12.9720,77.5950,2025-01-01T09:02:00Z
-# pause at a shop for 8 minutes
-12.9720,77.5950,2025-01-01T09:02:30Z
-12.9721,77.5950,2025-01-01T09:04:00Z
-12.9720,77.5951,2025-01-01T09:06:00Z
-12.9720,77.5950,2025-01-01T09:08:00Z
-12.9721,77.5951,2025-01-01T09:10:00Z
-# walk home
-12.9718,77.5948,2025-01-01T09:10:30Z
-12.9715,77.5945,2025-01-01T09:11:00Z
-12.9712,77.5942,2025-01-01T09:11:30Z
-12.9710,77.5940,2025-01-01T09:12:00Z`;
-
 interface Props {
   value: string;
   onChange: (v: string) => void;
   onSubmit: () => void;
   submitLabel?: string;
   loading?: boolean;
+  /**
+   * Optional callback fired when the user picks a preset sample. When
+   * provided, the parent can react synchronously (e.g. auto-compute
+   * once the textarea has been populated). When omitted, picking a
+   * sample only updates the textarea.
+   */
+  onLoadSample?: (sample: Sample) => void;
 }
 
-export function CoordinateInput({ value, onChange, onSubmit, submitLabel = "Compute", loading }: Props) {
+export function CoordinateInput({ value, onChange, onSubmit, submitLabel = "Compute", loading, onLoadSample }: Props) {
   const [dragging, setDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadNote, setUploadNote] = useState<string | null>(null);
@@ -100,20 +90,31 @@ export function CoordinateInput({ value, onChange, onSubmit, submitLabel = "Comp
     if (f) void handleFile(f);
   }
 
+  function pickSample(sample: Sample) {
+    onChange(sample.text);
+    if (onLoadSample) onLoadSample(sample);
+  }
+
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <Label htmlFor="coords">GPS coordinates</Label>
-        <div className="flex items-center gap-2">
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => onChange(SAMPLE)}
-            disabled={loading}
-          >
-            Load sample
-          </Button>
+        <div className="flex flex-wrap items-center gap-1">
+          <span className="hidden text-xs text-slate-500 sm:inline">Try a sample:</span>
+          {SAMPLES.map((s) => (
+            <Button
+              key={s.id}
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => pickSample(s)}
+              disabled={loading || uploading}
+              title={s.description}
+            >
+              <span aria-hidden className="mr-1">{s.emoji}</span>
+              {s.label}
+            </Button>
+          ))}
           <Button
             type="button"
             variant="ghost"

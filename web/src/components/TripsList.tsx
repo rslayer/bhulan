@@ -5,6 +5,8 @@ import { Route } from "lucide-react";
 
 interface Props {
   trips: TripOut[];
+  /** Optional DOM id on the outer card so summary chips can scroll to it. */
+  id?: string;
 }
 
 function fmtTs(iso: string | null | undefined): string {
@@ -21,9 +23,9 @@ function fmtTs(iso: string | null | undefined): string {
  * coordinates are also shown so an export-to-map flow has everything
  * it needs.
  */
-export function TripsList({ trips }: Props) {
+export function TripsList({ trips, id }: Props) {
   return (
-    <Card>
+    <Card id={id}>
       <CardHeader>
         <CardTitle className="text-sm">Trips ({trips.length})</CardTitle>
       </CardHeader>

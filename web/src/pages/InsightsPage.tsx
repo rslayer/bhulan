@@ -3,6 +3,7 @@ import { CoordinateInput } from "@/components/CoordinateInput";
 import { InsightsPanel } from "@/components/InsightsPanel";
 import { MapView } from "@/components/MapView";
 import { ShareLinkButton } from "@/components/ShareLinkButton";
+import { useAuth } from "@/components/AuthProvider";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -29,6 +30,7 @@ const DEFAULT_OPTIONS: Options = {
 };
 
 export function InsightsPage() {
+  const { user } = useAuth();
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -102,14 +104,18 @@ export function InsightsPage() {
     return () => window.removeEventListener("bhulan:replay", consumeReplay);
   }, []);
 
-  async function run() {
+  // Accepts an optional ``override`` so the preset "Try a sample"
+  // buttons can compute against the freshly-loaded text without
+  // waiting a render for ``setText`` to settle.
+  async function run(override?: string) {
+    const inputText = override ?? text;
     setLoading(true);
     setError(null);
     try {
       // Compute insights + fetch cleaned points for the map in parallel.
       const [rep, plot] = await Promise.all([
-        computeInsights({ text, options }),
-        validatePlot({ text }),
+        computeInsights({ text: inputText, options }),
+        validatePlot({ text: inputText }),
       ]);
       setReport(rep);
       setPoints(plot.points);
@@ -133,10 +139,17 @@ export function InsightsPage() {
             <CoordinateInput
               value={text}
               onChange={setText}
-              onSubmit={run}
+              onSubmit={() => void run()}
               loading={loading}
               submitLabel="Compute insights"
+              onLoadSample={(s) => void run(s.text)}
             />
+
+            {!user && (
+              <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                Anonymous runs aren&rsquo;t stored. Sign in to save your history.
+              </div>
+            )}
 
             <div>
               <Button
