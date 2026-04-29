@@ -1,4 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { HotspotsList } from "@/components/HotspotsList";
 import { TripsList } from "@/components/TripsList";
 import type { InsightsReport } from "@/lib/api";
@@ -6,6 +7,7 @@ import { formatMinutes, formatNumber } from "@/lib/utils";
 import {
   Activity,
   CircleSlash,
+  Flame,
   Gauge,
   MapPin,
   Route,
@@ -18,6 +20,11 @@ interface Props {
   /** Pass-through to HotspotsList so the "grid ~N m" label reflects the
    * actual setting when the caller tuned ``hotspot_grid_m``. */
   hotspotGridM?: number;
+}
+
+function scrollToId(id: string) {
+  const el = typeof document !== "undefined" ? document.getElementById(id) : null;
+  if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 interface StatProps {
@@ -51,9 +58,47 @@ function fmtTs(iso: string | null | undefined): string {
 
 export function InsightsPanel({ report, hotspotGridM }: Props) {
   const s = report.summary;
+  const stopCount = report.stops.length;
+  const tripCount = report.trips?.length ?? 0;
+  const hotspotCount = report.hotspots?.length ?? 0;
 
   return (
     <div className="flex flex-col gap-4">
+      <div className="sticky top-2 z-10 flex flex-wrap items-center gap-1.5 rounded-lg border border-slate-200 bg-white/90 p-2 text-xs shadow-sm backdrop-blur">
+        <span className="px-1 font-medium text-slate-500">
+          {formatNumber(s.total_distance_km, 2)} km · {formatMinutes(s.moving_time_min)} moving
+        </span>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-7 px-2 text-xs"
+          onClick={() => scrollToId("insights-stops")}
+        >
+          <MapPin className="mr-1 h-3.5 w-3.5 text-rose-600" />
+          {stopCount} stops
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-7 px-2 text-xs"
+          onClick={() => scrollToId("insights-trips")}
+        >
+          <Route className="mr-1 h-3.5 w-3.5 text-slate-600" />
+          {tripCount} trips
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-7 px-2 text-xs"
+          onClick={() => scrollToId("insights-hotspots")}
+        >
+          <Flame className="mr-1 h-3.5 w-3.5 text-amber-600" />
+          {hotspotCount} hotspots
+        </Button>
+      </div>
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
         <Stat
           label="Distance"
@@ -101,7 +146,7 @@ export function InsightsPanel({ report, hotspotGridM }: Props) {
         </div>
       )}
 
-      <Card>
+      <Card id="insights-stops">
         <CardHeader>
           <CardTitle className="text-sm">Stops ({report.stops.length})</CardTitle>
         </CardHeader>
@@ -134,8 +179,12 @@ export function InsightsPanel({ report, hotspotGridM }: Props) {
         </CardContent>
       </Card>
 
-      <TripsList trips={report.trips ?? []} />
-      <HotspotsList hotspots={report.hotspots ?? []} gridM={hotspotGridM} />
+      <TripsList trips={report.trips ?? []} id="insights-trips" />
+      <HotspotsList
+        hotspots={report.hotspots ?? []}
+        gridM={hotspotGridM}
+        id="insights-hotspots"
+      />
 
       {report.quality.issues.length > 0 && (
         <Card className="border-amber-300 bg-amber-50">

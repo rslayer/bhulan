@@ -15,6 +15,8 @@ interface Props {
    * correct for the common case.
    */
   gridM?: number;
+  /** Optional DOM id on the outer card so summary chips can scroll to it. */
+  id?: string;
 }
 
 /**
@@ -28,9 +30,10 @@ export function HotspotsList({
   title = "Hotspots",
   emptyNote,
   gridM = 100,
+  id,
 }: Props) {
   return (
-    <Card>
+    <Card id={id}>
       <CardHeader>
         <CardTitle className="text-sm">
           {title} ({hotspots.length})

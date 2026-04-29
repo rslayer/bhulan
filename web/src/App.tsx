@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { GitCompareArrows, History, Map, Sparkles } from "lucide-react";
 import { AuthProvider, useAuth } from "@/components/AuthProvider";
+import { PrivacyDialog } from "@/components/PrivacyDialog";
 import { UserMenu } from "@/components/UserMenu";
 import { ComparePage } from "@/pages/ComparePage";
 import { HistoryPage } from "@/pages/HistoryPage";
@@ -58,6 +59,7 @@ function Tabs({ tab, onChange }: { tab: Tab; onChange: (t: Tab) => void }) {
 
 function AppShell() {
   const [tab, setTab] = useState<Tab>("insights");
+  const [privacyOpen, setPrivacyOpen] = useState(false);
   const { user } = useAuth();
 
   // Replay from the History tab lands on the Insights tab. HistoryPage
@@ -75,7 +77,9 @@ function AppShell() {
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-3">
           <div>
             <div className="text-lg font-semibold">Bhulan</div>
-            <div className="text-xs text-slate-500">GPS mobility insights &amp; plotting</div>
+            <div className="text-xs text-slate-500">
+              Find stops, trips, and frequent locations in any GPS track
+            </div>
           </div>
           <div className="flex flex-wrap items-center gap-3">
             <Tabs tab={tab} onChange={setTab} />
@@ -90,10 +94,21 @@ function AppShell() {
         {tab === "history" && <HistoryPage />}
       </main>
       <footer className="mx-auto max-w-6xl px-4 py-8 text-xs text-slate-500">
-        {user
-          ? "Signed in — your insights runs are saved to your history."
-          : "All analysis runs against your bhulan backend — sign in to save your history."}
+        <span>
+          {user
+            ? "Signed in — your insights runs are saved to your history."
+            : "Anonymous runs aren\u2019t stored. Sign in to save your history."}
+        </span>
+        <span aria-hidden> · </span>
+        <button
+          type="button"
+          className="underline-offset-2 hover:underline"
+          onClick={() => setPrivacyOpen(true)}
+        >
+          Privacy
+        </button>
       </footer>
+      {privacyOpen && <PrivacyDialog onClose={() => setPrivacyOpen(false)} />}
     </div>
   );
 }
