@@ -9,3 +9,6 @@ visualize_palo_alto_standalone.py
 # above (which were written for the legacy plotting scripts).
 !web/index.html
 .coverage
+
+# IDE
+.idea/

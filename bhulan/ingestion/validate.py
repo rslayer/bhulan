@@ -5,7 +5,7 @@ Implements data quality checks and repairs for ingested GPS data.
 """
 
 from typing import Dict, Any, Optional, Tuple
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from bhulan.models.canonical import TrackPoint
 
 
@@ -64,13 +64,14 @@ def validate_timestamp(ts: datetime) -> Tuple[bool, Optional[str]]:
     Returns:
         Tuple of (is_valid, error_message)
     """
+    ts_naive = ts.astimezone(timezone.utc).replace(tzinfo=None) if ts.tzinfo is not None else ts
     min_date = datetime(1970, 1, 1)
-    max_date = datetime.utcnow() + timedelta(days=2)
+    max_date = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=2)
     
-    if ts < min_date:
+    if ts_naive < min_date:
         return False, f"Timestamp {ts} is before 1970-01-01"
     
-    if ts > max_date:
+    if ts_naive > max_date:
         return False, f"Timestamp {ts} is more than 2 days in the future"
     
     return True, None
@@ -158,9 +159,9 @@ def repair_timestamp(value: Any) -> datetime:
     if isinstance(value, (int, float)):
         try:
             if value > 1e10:  # Likely milliseconds
-                return datetime.utcfromtimestamp(value / 1000)
+                return datetime.fromtimestamp(value / 1000, tz=timezone.utc)
             else:  # Likely seconds
-                return datetime.utcfromtimestamp(value)
+                return datetime.fromtimestamp(value, tz=timezone.utc)
         except (ValueError, OSError) as e:
             raise ValidationError(f"Invalid epoch timestamp: {value}")
     

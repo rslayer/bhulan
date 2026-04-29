@@ -36,20 +36,24 @@ jobs:
         run: poetry install --no-root
 
       - name: Lint (ruff)
-        # Scoped to the stateless analytics + public /v1 surface that this CI
-        # workflow actually cares about. The legacy ingestion/storage modules
-        # carry a long tail of pre-existing whitespace warnings; they'll be
-        # folded back in after a dedicated cleanup PR.
         run: |
           poetry run ruff check \
             bhulan/analytics \
             bhulan/api \
+            bhulan/auth \
+            bhulan/config \
             scripts \
-            tests/unit/analytics \
+            tests/unit \
             tests/integration/test_insights_api.py
 
-      - name: Run analytics + insights API tests
-        run: poetry run pytest tests/unit/analytics tests/integration/test_insights_api.py --no-cov -q
+      - name: Run all unit + integration tests
+        env:
+          PYTHONPATH: .
+        run: |
+          poetry run pytest \
+            tests/unit/ \
+            tests/integration/test_insights_api.py \
+            --no-cov -q
 
       - name: Verify OpenAPI schema is up to date
         env:

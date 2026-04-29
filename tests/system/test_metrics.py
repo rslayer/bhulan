@@ -14,6 +14,7 @@ import sys
 import os
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../legacy')))
 
 from tests.system.test_helpers import setup_stubs, generate_gps_route
 from tests.system.fake_db import FakeMongoClient

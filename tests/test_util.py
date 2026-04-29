@@ -6,10 +6,14 @@ Tests cover distance calculations, time helpers, and utility functions.
 External dependencies (geopy, xlrd) are stubbed to avoid network calls and missing packages.
 """
 
+import os
 import unittest
 import sys
 import types
 from datetime import datetime, timedelta
+
+# The legacy modules now live under legacy/ at the repo root.
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'legacy'))
 
 geopy = types.ModuleType('geopy')
 geocoders = types.ModuleType('geopy.geocoders')
