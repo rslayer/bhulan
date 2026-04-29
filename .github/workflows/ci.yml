@@ -12,7 +12,7 @@ concurrency:
 
 jobs:
   backend:
-    name: Backend (pytest + ruff + mypy)
+    name: Backend (pytest + ruff)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
