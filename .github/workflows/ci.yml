@@ -12,7 +12,7 @@ concurrency:
 
 jobs:
   backend:
-    name: Backend (pytest + ruff)
+    name: Backend (pytest + ruff + mypy)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -37,14 +37,11 @@ jobs:
 
       - name: Lint (ruff)
         run: |
-          poetry run ruff check \
-            bhulan/analytics \
-            bhulan/api \
-            bhulan/auth \
-            bhulan/config \
-            scripts \
-            tests/unit \
-            tests/integration/test_insights_api.py
+          poetry run ruff check bhulan/ scripts/ tests/
+
+      - name: Typecheck (mypy)
+        run: |
+          poetry run mypy bhulan/
 
       - name: Run all unit + integration tests
         env:

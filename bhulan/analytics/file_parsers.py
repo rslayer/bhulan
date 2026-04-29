@@ -51,7 +51,7 @@ def parse_gpx_bytes(data: bytes) -> List[PointIn]:
         raise ParseError("gpxpy is required to parse GPX files") from exc
 
     try:
-        gpx = gpxpy.parse(io.BytesIO(data))
+        gpx = gpxpy.parse(io.BytesIO(data).read().decode("utf-8"))
     except Exception as exc:
         raise ParseError(f"Invalid GPX: {exc}") from exc
 
@@ -63,12 +63,12 @@ def parse_gpx_bytes(data: bytes) -> List[PointIn]:
                 _append_gpx_point(out, pt.latitude, pt.longitude, pt.time, pt.speed)
 
     for route in gpx.routes:
-        for pt in route.points:
+        for rpt in route.points:
             # GPX 1.1 doesn't define speed on <rtept> either; gpxpy's
             # GPXRoutePoint mirrors GPXWaypoint and omits the attribute,
             # so go through getattr like the waypoint branch below.
             _append_gpx_point(
-                out, pt.latitude, pt.longitude, pt.time, getattr(pt, "speed", None)
+                out, rpt.latitude, rpt.longitude, rpt.time, getattr(rpt, "speed", None)
             )
 
     for wpt in gpx.waypoints:

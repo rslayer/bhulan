@@ -140,7 +140,7 @@ def segment_by_motion(
     step_dist = haversine_vec_m(lats, lons)
     step_secs = np.array(
         [
-            max((points[i + 1].ts_utc - points[i].ts_utc).total_seconds(), 0.0)  # type: ignore[union-attr]
+            max((points[i + 1].ts_utc - points[i].ts_utc).total_seconds(), 0.0)  # type: ignore[operator]
             for i in range(n - 1)
         ],
         dtype=np.float64,
@@ -166,7 +166,7 @@ def segment_by_motion(
     raw.append(("moving" if moving_mask[start] else "stopped", start, n - 1))
 
     def _seg_duration(a: int, b: int) -> float:
-        return (points[b].ts_utc - points[a].ts_utc).total_seconds()  # type: ignore[union-attr]
+        return (points[b].ts_utc - points[a].ts_utc).total_seconds()  # type: ignore[operator]
 
     merged: List[Tuple[str, int, int]] = []
     for seg in raw:
@@ -232,7 +232,7 @@ def speed_stats_mps(
         lons = [p.lon for p in points]
         step_dist = haversine_vec_m(lats, lons)
         step_secs = [
-            (points[i + 1].ts_utc - points[i].ts_utc).total_seconds()  # type: ignore[union-attr]
+            (points[i + 1].ts_utc - points[i].ts_utc).total_seconds()  # type: ignore[operator]
             if points[i + 1].ts_utc and points[i].ts_utc
             else 0.0
             for i in range(n - 1)

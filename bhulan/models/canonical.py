@@ -4,33 +4,34 @@ Canonical schema for GPS track points.
 Defines the normalized data model that all ingested GPS data is converted to.
 """
 
-from pydantic import BaseModel, Field, field_validator
-from typing import Optional, Dict, Any
-from datetime import datetime, timedelta, timezone
 import uuid
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, Optional
+
+from pydantic import BaseModel, Field, field_validator
 
 
 class TrackPoint(BaseModel):
     """
     Canonical GPS track point model.
-    
+
     All ingested GPS data is normalized to this schema regardless of source.
     """
     device_id: str = Field(..., description="Unique identifier for the device/vehicle")
     ts_utc: datetime = Field(..., description="Timestamp in UTC")
     lat: float = Field(..., ge=-90, le=90, description="Latitude in decimal degrees")
     lon: float = Field(..., ge=-180, le=180, description="Longitude in decimal degrees")
-    
+
     speed_mps: Optional[float] = Field(None, ge=0, description="Speed in meters per second")
     heading_deg: Optional[float] = Field(None, ge=0, lt=360, description="Heading in degrees (0-359)")
     alt_m: Optional[float] = Field(None, description="Altitude in meters")
     hdop: Optional[float] = Field(None, ge=0, description="Horizontal dilution of precision")
-    
+
     src: Optional[str] = Field(None, description="Source/vendor identifier")
     raw: Optional[Dict[str, Any]] = Field(None, description="Original raw data")
     ingest_id: str = Field(default_factory=lambda: str(uuid.uuid4()), description="Ingestion job ID")
     seq_no: Optional[int] = Field(None, description="Sequence number within source")
-    
+
     @field_validator('ts_utc')
     @classmethod
     def validate_timestamp(cls, v):
@@ -41,7 +42,7 @@ class TrackPoint(BaseModel):
         if v_naive < min_date or v_naive > max_date:
             raise ValueError(f"Timestamp {v} is outside valid range [{min_date}, {max_date}]")
         return v
-    
+
     @field_validator('speed_mps')
     @classmethod
     def validate_speed(cls, v):
@@ -49,11 +50,11 @@ class TrackPoint(BaseModel):
         if v is not None and v > 120:
             return None  # Set to None if unreasonable
         return v
-    
+
     def to_mongo_doc(self) -> Dict[str, Any]:
         """
         Convert to MongoDB document format with GeoJSON location.
-        
+
         Returns:
             Dictionary suitable for MongoDB insertion with 2dsphere index support
         """
@@ -63,11 +64,11 @@ class TrackPoint(BaseModel):
             'coordinates': [self.lon, self.lat]  # GeoJSON uses [lon, lat] order
         }
         return doc
-    
+
     def compute_hash(self) -> str:
         """
         Compute deterministic hash for deduplication.
-        
+
         Uses device_id, timestamp, lat, lon to create unique identifier.
         """
         import hashlib

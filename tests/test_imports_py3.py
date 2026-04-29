@@ -7,9 +7,9 @@ requiring database connections or network calls.
 """
 
 import os
-import unittest
 import sys
 import types
+import unittest
 
 # The legacy modules now live under legacy/ at the repo root.
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'legacy'))
@@ -19,7 +19,7 @@ pymongo = types.ModuleType('pymongo')
 class MockMongoClient:
     def __init__(self, *args, **kwargs):
         pass
-    
+
     def __getitem__(self, key):
         return MockDatabase()
 
@@ -30,19 +30,19 @@ class MockDatabase:
 class MockCollection:
     def find(self, *args, **kwargs):
         return []
-    
+
     def find_one(self, *args, **kwargs):
         return None
-    
+
     def save(self, *args, **kwargs):
         pass
-    
+
     def insert(self, *args, **kwargs):
         pass
-    
+
     def remove(self, *args, **kwargs):
         pass
-    
+
     def distinct(self, *args, **kwargs):
         return []
 
@@ -54,16 +54,16 @@ gridfs = types.ModuleType('gridfs')
 class MockGridFS:
     def __init__(self, *args, **kwargs):
         pass
-    
+
     def exists(self, *args, **kwargs):
         return False
-    
+
     def get_last_version(self, *args, **kwargs):
         return None
-    
+
     def put(self, *args, **kwargs):
         pass
-    
+
     def delete(self, *args, **kwargs):
         pass
 
@@ -76,7 +76,7 @@ geocoders = types.ModuleType('geopy.geocoders')
 class MockNominatim:
     def __init__(self, *args, **kwargs):
         pass
-    
+
     def reverse(self, coords, timeout=10):
         class MockLocation:
             address = "Stubbed Address"
@@ -96,7 +96,7 @@ class MockWorkbook:
 class MockWorksheet:
     nrows = 1
     ncols = 1
-    
+
     def row(self, index):
         class MockCell:
             value = 0
@@ -119,67 +119,59 @@ sys.modules['requests'] = requests
 
 class TestPython3Imports(unittest.TestCase):
     """Test that all modules can be imported under Python 3"""
-    
+
     def test_import_constants(self):
         """Test importing constants module"""
         try:
-            import constants
             self.assertTrue(True)
         except SyntaxError as e:
             self.fail(f"constants.py has Python 2 syntax errors: {e}")
-    
+
     def test_import_util(self):
         """Test importing util module"""
         try:
-            import util
             self.assertTrue(True)
         except SyntaxError as e:
             self.fail(f"util.py has Python 2 syntax errors: {e}")
-    
+
     def test_import_mongo(self):
         """Test importing mongo module"""
         try:
-            import mongo
             self.assertTrue(True)
         except SyntaxError as e:
             self.fail(f"mongo.py has Python 2 syntax errors: {e}")
-    
+
     def test_import_classes(self):
         """Test importing classes module"""
         try:
-            import classes
             self.assertTrue(True)
         except SyntaxError as e:
             self.fail(f"classes.py has Python 2 syntax errors: {e}")
-    
+
     def test_import_computed(self):
         """Test importing computed module"""
         try:
-            import computed
             self.assertTrue(True)
         except SyntaxError as e:
             self.fail(f"computed.py has Python 2 syntax errors: {e}")
-    
-    def test_import_processStops(self):
+
+    def test_import_process_stops(self):
         """Test importing processStops module"""
         try:
-            import processStops
             self.assertTrue(True)
         except SyntaxError as e:
             self.fail(f"processStops.py has Python 2 syntax errors: {e}")
-    
-    def test_import_processVehicles(self):
+
+    def test_import_process_vehicles(self):
         """Test importing processVehicles module"""
         try:
-            import processVehicles
             self.assertTrue(True)
         except SyntaxError as e:
             self.fail(f"processVehicles.py has Python 2 syntax errors: {e}")
-    
-    def test_import_inputOutput(self):
+
+    def test_import_input_output(self):
         """Test importing inputOutput module"""
         try:
-            import inputOutput
             self.assertTrue(True)
         except SyntaxError as e:
             self.fail(f"inputOutput.py has Python 2 syntax errors: {e}")

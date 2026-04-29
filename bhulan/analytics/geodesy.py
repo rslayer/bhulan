@@ -46,7 +46,8 @@ def haversine_vec_m(lats: Sequence[float], lons: Sequence[float]) -> np.ndarray:
     a = np.sin(dphi / 2.0) ** 2 + np.cos(phi1) * np.cos(phi2) * np.sin(dlambda / 2.0) ** 2
     a = np.clip(a, 0.0, 1.0)
     c = 2.0 * np.arcsin(np.sqrt(a))
-    return EARTH_RADIUS_M * c
+    distances: np.ndarray = EARTH_RADIUS_M * c
+    return distances
 
 
 def bounding_box(

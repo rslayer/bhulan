@@ -6,15 +6,17 @@ Supports CSV, JSON, Excel (XLSX), and Parquet files from local filesystem or S3.
 
 import csv
 import json
-from typing import List, Dict, Any, Optional, Iterator
-from pathlib import Path
-import pandas as pd
-from bhulan.ingestion.normalize import MappingPlan, normalize_batch
-from bhulan.models.canonical import NormalizationResult, TrackPoint
-from bhulan.models.vendor.generic import infer_field_mapping, create_generic_mapping
-from bhulan.storage.mongo_repo import MongoTrackPointRepository, MongoJobRegistry
-from bhulan.config.settings import settings
 import uuid
+from pathlib import Path
+from typing import Any, Dict, Iterable, Iterator, List, Optional
+
+import pandas as pd  # type: ignore[import-untyped]
+
+from bhulan.config.settings import settings
+from bhulan.ingestion.normalize import MappingPlan, normalize_batch
+from bhulan.models.canonical import NormalizationResult
+from bhulan.models.vendor.generic import infer_field_mapping
+from bhulan.storage.mongo_repo import MongoJobRegistry, MongoTrackPointRepository
 
 
 class FileIngestionError(Exception):
@@ -25,19 +27,19 @@ class FileIngestionError(Exception):
 def detect_file_type(file_path: str) -> str:
     """
     Detect file type from extension.
-    
+
     Args:
         file_path: Path to file
-        
+
     Returns:
         File type (csv, json, xlsx, parquet)
-        
+
     Raises:
         FileIngestionError: If file type is not supported
     """
     path = Path(file_path)
     ext = path.suffix.lower()
-    
+
     type_map = {
         '.csv': 'csv',
         '.json': 'json',
@@ -47,21 +49,21 @@ def detect_file_type(file_path: str) -> str:
         '.xls': 'xlsx',
         '.parquet': 'parquet',
     }
-    
+
     if ext not in type_map:
         raise FileIngestionError(f"Unsupported file type: {ext}")
-    
+
     return type_map[ext]
 
 
 def read_csv_file(file_path: str, chunk_size: int = 1000) -> Iterator[List[Dict[str, Any]]]:
     """
     Read CSV file in chunks.
-    
+
     Args:
         file_path: Path to CSV file
         chunk_size: Number of rows per chunk
-        
+
     Yields:
         Chunks of records as list of dictionaries
     """
@@ -73,19 +75,20 @@ def read_csv_file(file_path: str, chunk_size: int = 1000) -> Iterator[List[Dict[
 def read_json_file(file_path: str) -> List[Dict[str, Any]]:
     """
     Read JSON file (array or NDJSON).
-    
+
     Args:
         file_path: Path to JSON file
-        
+
     Returns:
         List of records
     """
     with open(file_path, 'r') as f:
         first_char = f.read(1)
         f.seek(0)
-        
+
         if first_char == '[':
-            return json.load(f)
+            result: List[Dict[str, Any]] = json.load(f)
+            return result
         else:
             records = []
             for line in f:
@@ -97,16 +100,16 @@ def read_json_file(file_path: str) -> List[Dict[str, Any]]:
 def read_excel_file(file_path: str, chunk_size: int = 1000) -> Iterator[List[Dict[str, Any]]]:
     """
     Read Excel file in chunks.
-    
+
     Args:
         file_path: Path to Excel file
         chunk_size: Number of rows per chunk
-        
+
     Yields:
         Chunks of records as list of dictionaries
     """
     df = pd.read_excel(file_path)
-    
+
     for i in range(0, len(df), chunk_size):
         chunk = df.iloc[i:i+chunk_size]
         records = chunk.to_dict('records')
@@ -116,16 +119,16 @@ def read_excel_file(file_path: str, chunk_size: int = 1000) -> Iterator[List[Dic
 def read_parquet_file(file_path: str, chunk_size: int = 1000) -> Iterator[List[Dict[str, Any]]]:
     """
     Read Parquet file in chunks.
-    
+
     Args:
         file_path: Path to Parquet file
         chunk_size: Number of rows per chunk
-        
+
     Yields:
         Chunks of records as list of dictionaries
     """
     df = pd.read_parquet(file_path)
-    
+
     for i in range(0, len(df), chunk_size):
         chunk = df.iloc[i:i+chunk_size]
         records = chunk.to_dict('records')
@@ -135,11 +138,11 @@ def read_parquet_file(file_path: str, chunk_size: int = 1000) -> Iterator[List[D
 def infer_mapping_from_file(file_path: str, file_type: str) -> MappingPlan:
     """
     Infer field mapping from file headers.
-    
+
     Args:
         file_path: Path to file
         file_type: File type (csv, json, xlsx, parquet)
-        
+
     Returns:
         Inferred MappingPlan
     """
@@ -161,9 +164,9 @@ def infer_mapping_from_file(file_path: str, file_type: str) -> MappingPlan:
             headers = []
     else:
         raise FileIngestionError(f"Cannot infer mapping for file type: {file_type}")
-    
-    field_map = infer_field_mapping(headers)
-    
+
+    field_map = infer_field_mapping(list(headers or []))
+
     return MappingPlan(
         field_map=field_map,
         unit_map={},
@@ -182,7 +185,7 @@ def ingest_file(
 ) -> NormalizationResult:
     """
     Ingest GPS data from file.
-    
+
     Args:
         file_path: Path to file (local or s3://)
         mapping: Mapping plan (inferred if not provided)
@@ -190,61 +193,62 @@ def ingest_file(
         vendor: Vendor identifier
         repo: Track point repository (created if not provided)
         job_registry: Job registry (created if not provided)
-        
+
     Returns:
         NormalizationResult with statistics
     """
     if ingest_id is None:
         ingest_id = str(uuid.uuid4())
-    
+
     if repo is None:
         repo = MongoTrackPointRepository()
     if job_registry is None:
         job_registry = MongoJobRegistry()
-    
+
     job_registry.create_job(
         ingest_id=ingest_id,
         source='file',
         params={'file_path': file_path, 'vendor': vendor}
     )
-    
+
     try:
         file_type = detect_file_type(file_path)
-        
+
         if mapping is None:
             mapping = infer_mapping_from_file(file_path, file_type)
-        
+
         total_read = 0
         total_accepted = 0
         total_rejected = 0
         all_errors = {}
-        
+
+        chunks: Iterable[List[Dict[str, Any]]]
         if file_type == 'csv':
-            reader = read_csv_file(file_path, chunk_size=settings.MAX_BATCH_SIZE)
+            chunks = read_csv_file(file_path, chunk_size=settings.MAX_BATCH_SIZE)
         elif file_type == 'xlsx':
-            reader = read_excel_file(file_path, chunk_size=settings.MAX_BATCH_SIZE)
+            chunks = read_excel_file(file_path, chunk_size=settings.MAX_BATCH_SIZE)
         elif file_type == 'parquet':
-            reader = read_parquet_file(file_path, chunk_size=settings.MAX_BATCH_SIZE)
+            chunks = read_parquet_file(file_path, chunk_size=settings.MAX_BATCH_SIZE)
         elif file_type in ['json', 'jsonl']:
             records = read_json_file(file_path)
-            reader = [records[i:i+settings.MAX_BATCH_SIZE] 
+            chunks = [records[i:i+settings.MAX_BATCH_SIZE]
                      for i in range(0, len(records), settings.MAX_BATCH_SIZE)]
-        
-        for chunk in reader:
+
+        for chunk in chunks:
             total_read += len(chunk)
-            
+
             result, points = normalize_batch(chunk, mapping, ingest_id)
-            
+
             total_accepted += result.accepted
             total_rejected += result.rejected
-            
+
             for idx, error in result.errors.items():
                 global_idx = total_read - len(chunk) + idx
                 all_errors[global_idx] = error
-            
+
             if points:
                 repo.upsert_batch(points)
-        
+
         job_registry.update_job_status(
             ingest_id=ingest_id,
             status='succeeded' if total_rejected == 0 else 'partial',
@@ -255,14 +259,14 @@ def ingest_file(
             },
             error_sample=dict(list(all_errors.items())[:10])  # First 10 errors
         )
-        
+
         return NormalizationResult(
             accepted=total_accepted,
             rejected=total_rejected,
             errors=all_errors,
             ingest_id=ingest_id
         )
-        
+
     except Exception as e:
         job_registry.update_job_status(
             ingest_id=ingest_id,
