@@ -64,7 +64,7 @@ def validate_timestamp(ts: datetime) -> Tuple[bool, Optional[str]]:
     Returns:
         Tuple of (is_valid, error_message)
     """
-    ts_naive = ts.replace(tzinfo=None) if ts.tzinfo is not None else ts
+    ts_naive = ts.astimezone(timezone.utc).replace(tzinfo=None) if ts.tzinfo is not None else ts
     min_date = datetime(1970, 1, 1)
     max_date = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=2)
     

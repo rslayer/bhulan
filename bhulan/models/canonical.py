@@ -35,7 +35,7 @@ class TrackPoint(BaseModel):
     @classmethod
     def validate_timestamp(cls, v):
         """Ensure timestamp is reasonable (not too far in past or future)."""
-        v_naive = v.replace(tzinfo=None) if v.tzinfo is not None else v
+        v_naive = v.astimezone(timezone.utc).replace(tzinfo=None) if v.tzinfo is not None else v
         min_date = datetime(1970, 1, 1)
         max_date = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=2)
         if v_naive < min_date or v_naive > max_date:
