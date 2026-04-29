@@ -1,10 +1,17 @@
 import { useEffect, useRef, useState } from "react";
 import { CoordinateInput } from "@/components/CoordinateInput";
 import { MapView } from "@/components/MapView";
+import { MapLayerToggle, type MapLayerMode } from "@/components/MapLayerToggle";
 import { ShareLinkButton } from "@/components/ShareLinkButton";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { validatePlot, type Point } from "@/lib/api";
 import { decodeShareFragment } from "@/lib/permalink";
+
+// For very large datasets the per-sample CircleMarker rendering becomes
+// the dominant paint cost and the map turns into a blob. Above this
+// threshold we default to the heatmap layer instead; the user can still
+// flip back via the toggle.
+const HEATMAP_AUTO_THRESHOLD = 10000;
 
 export function PlotPage() {
   const [text, setText] = useState("");
@@ -14,6 +21,8 @@ export function PlotPage() {
   const [accepted, setAccepted] = useState(0);
   const [rejected, setRejected] = useState(0);
   const [issues, setIssues] = useState<string[]>([]);
+  const [layerMode, setLayerMode] = useState<MapLayerMode>("markers");
+  const [layerTouched, setLayerTouched] = useState(false);
   const hydratedRef = useRef(false);
 
   // Hydrate from a share fragment on first mount — see InsightsPage for
@@ -36,6 +45,16 @@ export function PlotPage() {
       setAccepted(res.accepted);
       setRejected(res.rejected);
       setIssues(res.issues);
+      // Auto-switch to the appropriate mode for the new dataset size
+      // unless the user has already picked a mode explicitly. This is
+      // two-directional: submitting a tiny track after a huge one flips
+      // back to Markers, otherwise the user would see 50 points as a
+      // heatmap they never chose.
+      if (!layerTouched) {
+        setLayerMode(
+          res.points.length >= HEATMAP_AUTO_THRESHOLD ? "heatmap" : "markers",
+        );
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setPoints([]);
@@ -92,11 +111,34 @@ export function PlotPage() {
 
       <div className="lg:col-span-3">
         <Card>
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0">
             <CardTitle>Map</CardTitle>
+            <MapLayerToggle
+              value={layerMode}
+              onChange={(m) => {
+                setLayerMode(m);
+                setLayerTouched(true);
+              }}
+              disabled={points.length === 0}
+            />
           </CardHeader>
           <CardContent>
-            <MapView points={points} />
+            <MapView
+              points={points}
+              layers={
+                layerMode === "heatmap"
+                  ? ["heatmap"]
+                  : layerMode === "both"
+                    ? ["lines", "markers", "heatmap"]
+                    : ["lines", "markers"]
+              }
+            />
+            {points.length >= HEATMAP_AUTO_THRESHOLD && layerMode !== "heatmap" && (
+              <div className="mt-2 text-xs text-slate-500">
+                {points.length.toLocaleString()} points — switch to heatmap for
+                faster rendering.
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

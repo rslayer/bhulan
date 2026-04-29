@@ -12,6 +12,7 @@ import iconUrl from "leaflet/dist/images/marker-icon.png";
 import iconRetinaUrl from "leaflet/dist/images/marker-icon-2x.png";
 import shadowUrl from "leaflet/dist/images/marker-shadow.png";
 import type { HotspotOut, Point, StopOut } from "@/lib/api";
+import { HeatLayer } from "@/components/HeatLayer";
 
 // Fix default marker icon paths so they load via Vite.
 L.Icon.Default.mergeOptions({
@@ -55,6 +56,15 @@ interface Props {
   // Optional shared hotspots layered on top of everything.
   hotspots?: HotspotOut[];
   className?: string;
+  // Render layers. When ``heatmap`` is included, the pooled sample set is
+  // drawn as a Leaflet.heat heatmap layer. ``markers`` controls the
+  // per-sample CircleMarker dots; ``lines`` controls the connecting
+  // Polylines. Defaults to ``['lines', 'markers']`` so existing callers
+  // are unaffected.
+  layers?: Array<"lines" | "markers" | "heatmap">;
+  // Pixel radius for the heatmap blobs; ignored unless ``heatmap`` is in
+  // ``layers``.
+  heatRadius?: number;
 }
 
 function allPoints(tracks: MapTrack[]): Point[] {
@@ -80,7 +90,12 @@ export function MapView({
   tracks,
   hotspots = [],
   className,
+  layers = ["lines", "markers"],
+  heatRadius = 18,
 }: Props) {
+  const showLines = layers.includes("lines");
+  const showMarkers = layers.includes("markers");
+  const showHeatmap = layers.includes("heatmap");
   // Normalize both shapes into a ``tracks`` array so the render path is
   // uniform. Single-track callers keep the original black-slate colour.
   const normalizedTracks: MapTrack[] =
@@ -117,7 +132,7 @@ export function MapView({
           // pointer events and confuse Leaflet's layer DOM.
           return (
             <Fragment key={`track-${tIdx}`}>
-              {line.length > 1 && (
+              {showLines && line.length > 1 && (
                 <Polyline
                   positions={line}
                   color={color}
@@ -125,18 +140,19 @@ export function MapView({
                   opacity={0.8}
                 />
               )}
-              {t.points.map((p, i) => (
-                <CircleMarker
-                  key={`pt-${tIdx}-${i}`}
-                  center={[p.lat, p.lon]}
-                  radius={3}
-                  pathOptions={{
-                    color,
-                    fillColor: color,
-                    fillOpacity: 0.7,
-                  }}
-                />
-              ))}
+              {showMarkers &&
+                t.points.map((p, i) => (
+                  <CircleMarker
+                    key={`pt-${tIdx}-${i}`}
+                    center={[p.lat, p.lon]}
+                    radius={3}
+                    pathOptions={{
+                      color,
+                      fillColor: color,
+                      fillOpacity: 0.7,
+                    }}
+                  />
+                ))}
               {(t.stops ?? []).map((s, i) => (
                 <CircleMarker
                   key={`stop-${tIdx}-${i}`}
@@ -194,6 +210,9 @@ export function MapView({
             </Popup>
           </CircleMarker>
         ))}
+        {showHeatmap && pooled.length > 0 && (
+          <HeatLayer points={pooled} radius={heatRadius} />
+        )}
         <FitBounds points={pooled} />
       </MapContainer>
     </div>
