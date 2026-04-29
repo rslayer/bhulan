@@ -77,6 +77,12 @@ app.include_router(history_router)
 # the feature is enabled on a real deploy we want the file + schema to
 # exist before the first request lands.
 if settings.BHULAN_AUTH_ENABLED:
+    if settings.BHULAN_AUTH_SECRET == "dev-secret-change-me":
+        raise RuntimeError(
+            "BHULAN_AUTH_ENABLED is true but BHULAN_AUTH_SECRET is still the "
+            "default value. Set BHULAN_AUTH_SECRET to a long random string "
+            "before enabling authentication."
+        )
     try:
         auth_db.init_db(settings.BHULAN_DB_PATH)
     except Exception as exc:  # pragma: no cover - depends on FS perms

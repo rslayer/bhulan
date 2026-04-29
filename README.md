@@ -1,51 +1,96 @@
 # bhulan
-An opensource python library for GPS data processing
 
-> **Note**: Repository access verified and functional.
-[Bhulan](https://en.wikipedia.org/wiki/Indus_river_dolphin) enables quick processing of raw gps data to identify properties of a vehicle's movements within the given gps trace. Using the api, you can identify a vehicle's route, stops, duration of stops, schedules, and clusters of service among other properties. 
+An open-source GPS data processing and mobility insights platform.
 
-## base requirements
-* [MongoDb 3.0.3](https://docs.mongodb.org/getting-started/shell/installation/)
-* [Python 2.7](https://www.python.org/download/releases/2.7/)
+[Bhulan](https://en.wikipedia.org/wiki/Indus_river_dolphin) transforms raw GPS coordinates into actionable mobility insights — stops, trips, hotspots, and summary metrics. Paste coordinates, upload a GPX/KML/FIT file, or send JSON via the API and get back a structured report you can visualise on a map.
 
-## setup
-* use the *init.py* file to setup the following initializing parameters:
-    * File Directory - directory location of the GPS files to be processed
-    * File Extension - extension of the file. This will determine how the system imports the file. Currently supporting excel files. Future iterations will have support for csv files
-* run *setup.py* to import trucks, compute properties, and compute stops
+## Requirements
 
-## import file format
-* the gps data to be processed by bhulan must be provided in a designated format
-* the input files must contain the following columns in the given format:
-    * vehicle id - unique identifier of the vehicle
-    * date and time - the date and time of the record. the date must be provided in [ISO 8601 format](https://en.wikipedia.org/wiki/ISO_8601)
-    * latitude - the current latitude of the vehicle location
-    * longitude - the current longitude of the vehicle location
-    * direction - the direction of the vehicle
-    * velocity - the current observed velocity of the vehicle
-    * temperature - the current outside temperature
-    
-refer to the sample file in the sampledata folder. 
+* [Python 3.10+](https://www.python.org/downloads/)
+* [Node.js 20+](https://nodejs.org/) (for the web frontend)
+* [Poetry 1.8+](https://python-poetry.org/docs/#installation)
+* MongoDB is **not** required for the public analytics surface (`/v1/insights`, `/v1/plot`, `/v1/compare`). It is only needed for the legacy ingestion endpoints (`/ingest/trackpoints`, `/jobs/*`).
 
-## internal date formats - datenum
-A pseudo indicator for date called DateNum is used to make processing of dates easy. 
-DateNum is calculated as below:
->Datenum = month_num * 31 + day_of_month
+## Quick start
 
-For June 30th, the month_num will be 6 while day_of_month will be 30. Therefore the datenum for June 30th will be 216.
+```bash
+# Backend
+poetry install
+poetry run uvicorn bhulan.api.app:app --reload     # http://localhost:8000
 
-## key properties
-* Truck Points (*getTruckPoints*) - returns all the truck points for a given truck (truckId). It will return the points for that day if date is proved (datenum)
-* Stops for Truck and Date (*getStopsFromTruckDate*) – returns all stops for that truck and date
-* Stop Properties for Truck and Date (*getStopPropsFromTruckDate*) – returns all stop properties for that truck and date
-* Truck Schedule for Date (*getTruckScheduleForDay*) – returns a truck schedule for a given day – schedule is the order of stops for that day.
-* Find Potential DC Locations (*findPotentialDCs*) – returns the estimated location of a Distribution Center based on the stop data
-* Total Distance Traveled for Truck and Date (*getTotalDistanceTraveled*) - returns the total distance traveled for a truck on a given day
-* Total Time on Road for Truck and Date (*getTotalTimeOnRoad*) - returns the total time on road traveled for a truck on a given day
-* Average Speed for Truck and Date (*getAverageSpeedByDatenum*) - returns the average speed on road for truck on a given day
-* Address for Stops (*getAddressForStop*) - returns the reverse geocoded address for a stop
+# Frontend (in a second terminal)
+cd web
+npm install
+npm run dev                                         # http://localhost:5173
+```
 
-## stop and stop properties
-* A Stop is the 20 meter geographical radius where we have observed multiple gps points from a truck for greater than 10 minutes. 
-* A StopProperty contains details of each observed point within a Stop (20 meter radius location).
-* A stop will have multiple stop properties.
+The Vite dev server proxies `/v1` requests to the backend automatically.
+
+## API endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/v1/insights` | Compute stops, trips, hotspots, and summary metrics |
+| `POST` | `/v1/plot/validate` | Validate and normalise coordinates for map plotting |
+| `POST` | `/v1/compare` | Compare 2+ tracks side by side with shared hotspots |
+| `POST` | `/v1/parse/file` | Upload a GPX, KML, or FIT file and get parsed points |
+| `GET`  | `/v1/healthz` | Liveness probe |
+
+Interactive API docs are available at `/docs` (Swagger UI) when the server is running.
+
+## Input formats
+
+The `/v1/insights` and `/v1/plot/validate` endpoints accept either:
+
+- **Structured JSON** — an array of `{ lat, lon, ts_utc?, speed_mps? }` objects.
+- **Raw text** — CSV (with or without headers), JSON arrays, GeoJSON FeatureCollections, or plain `lat,lon` lines.
+
+File upload (`/v1/parse/file`) supports GPX, KML, and FIT formats.
+
+## Key concepts
+
+* **Stop** — a stationary period within a configurable radius (default 50 m) lasting at least a configurable duration (default 5 minutes).
+* **Trip** — a contiguous sub-track between two extended stops or data gaps.
+* **Hotspot** — a region of high sample density detected via grid binning and connected-component clustering.
+* **Reverse geocoding** — optional Nominatim-backed place name lookup for stops and hotspots (set `geocode_stops: true`).
+
+## Running tests
+
+```bash
+# All backend tests
+poetry run pytest
+
+# Analytics + API tests only (what CI runs)
+poetry run pytest tests/unit/analytics tests/integration/test_insights_api.py --no-cov -q
+
+# Frontend typecheck + build
+cd web && npm run build
+```
+
+## Docker
+
+```bash
+docker compose up          # Builds and runs the full app at http://localhost:8000
+```
+
+See [DEPLOY.md](DEPLOY.md) for production deployment to Fly.io.
+
+## Project structure
+
+```
+bhulan/
+├── analytics/     # Pure stateless GPS algorithms (stops, trips, hotspots, geodesy)
+├── api/           # FastAPI routes and middleware
+├── auth/          # Magic-link authentication + SQLite history (opt-in)
+├── config/        # Pydantic settings
+├── ingestion/     # Multi-source data ingestion (files, webhooks, Kafka, MQTT)
+├── models/        # Canonical schema + vendor adapters
+├── storage/       # MongoDB repository abstraction
+└── core/          # Logging utilities
+web/               # React + Vite + Leaflet frontend
+legacy/            # Original Python 2 processing scripts (archived)
+```
+
+## License
+
+[MIT](LICENSE)

@@ -6,7 +6,7 @@ Defines the normalized data model that all ingested GPS data is converted to.
 
 from pydantic import BaseModel, Field, field_validator
 from typing import Optional, Dict, Any
-from datetime import datetime
+from datetime import datetime, timedelta
 import uuid
 
 
@@ -35,9 +35,10 @@ class TrackPoint(BaseModel):
     @classmethod
     def validate_timestamp(cls, v):
         """Ensure timestamp is reasonable (not too far in past or future)."""
+        v_naive = v.replace(tzinfo=None) if v.tzinfo is not None else v
         min_date = datetime(1970, 1, 1)
         max_date = datetime.now() + timedelta(days=2)
-        if v < min_date or v > max_date:
+        if v_naive < min_date or v_naive > max_date:
             raise ValueError(f"Timestamp {v} is outside valid range [{min_date}, {max_date}]")
         return v
     
@@ -81,5 +82,3 @@ class NormalizationResult(BaseModel):
     errors: Dict[int, str] = Field(default_factory=dict, description="Row index to error message mapping")
     ingest_id: str = Field(..., description="Ingestion job ID")
 
-
-from datetime import timedelta

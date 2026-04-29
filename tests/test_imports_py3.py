@@ -6,9 +6,13 @@ This test stubs external dependencies (pymongo, geopy, xlrd) to avoid
 requiring database connections or network calls.
 """
 
+import os
 import unittest
 import sys
 import types
+
+# The legacy modules now live under legacy/ at the repo root.
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'legacy'))
 
 pymongo = types.ModuleType('pymongo')
 
