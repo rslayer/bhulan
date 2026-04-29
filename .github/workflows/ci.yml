@@ -69,7 +69,7 @@ jobs:
           fi
 
   frontend:
-    name: Frontend (build + codegen check)
+    name: Frontend (vitest + build + codegen check)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -88,6 +88,9 @@ jobs:
 
       - name: Typecheck + build
         run: npm run build
+
+      - name: Run tests
+        run: npm test
 
       - name: Verify generated API types are up to date
         run: npm run gen:api:check

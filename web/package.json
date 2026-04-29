@@ -10,7 +10,9 @@
     "preview": "vite preview",
     "typecheck": "tsc -b --noEmit",
     "gen:api": "openapi-typescript ../openapi.json -o src/lib/api.gen.ts",
-    "gen:api:check": "openapi-typescript ../openapi.json -o /tmp/api.gen.ts && diff -u src/lib/api.gen.ts /tmp/api.gen.ts"
+    "gen:api:check": "openapi-typescript ../openapi.json -o /tmp/api.gen.ts && diff -u src/lib/api.gen.ts /tmp/api.gen.ts",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@radix-ui/react-slot": "^1.1.0",
@@ -25,6 +27,9 @@
     "tailwind-merge": "^2.5.2"
   },
   "devDependencies": {
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
     "@types/leaflet": "^1.9.12",
     "@types/leaflet.heat": "^0.2.5",
     "@types/node": "^25.6.0",
@@ -32,10 +37,12 @@
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.3.2",
     "autoprefixer": "^10.4.20",
+    "jsdom": "^28.1.0",
     "openapi-typescript": "^7.4.1",
     "postcss": "^8.4.47",
     "tailwindcss": "^3.4.13",
     "typescript": "^5.6.2",
-    "vite": "^5.4.8"
+    "vite": "^5.4.8",
+    "vitest": "^4.1.5"
   }
 }
