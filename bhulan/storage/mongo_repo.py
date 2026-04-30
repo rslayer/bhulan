@@ -7,8 +7,8 @@ Provides concrete implementations for TrackPoint and Job storage using MongoDB.
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from pymongo import ASCENDING, GEOSPHERE, MongoClient
-from pymongo.errors import DuplicateKeyError
+from pymongo import ASCENDING, GEOSPHERE, MongoClient, UpdateOne
+from pymongo.errors import BulkWriteError
 
 from bhulan.config.settings import settings
 from bhulan.models.canonical import TrackPoint
@@ -34,36 +34,36 @@ class MongoTrackPointRepository(TrackPointRepository):
 
     def upsert_batch(self, points: List[TrackPoint]) -> int:
         """
-        Insert or update a batch of track points.
+        Insert or update a batch of track points using bulk_write.
 
         Uses point hash for deduplication. Skips duplicates silently.
+        Sends all operations in a single bulk_write call instead of
+        issuing one update_one per document.
 
         Args:
             points: List of TrackPoint objects to persist
 
         Returns:
-            Number of points successfully inserted/updated
+            Number of points successfully upserted
         """
         if not points:
             return 0
 
-        inserted_count = 0
+        ops = []
         for point in points:
             doc = point.to_mongo_doc()
             doc['_hash'] = point.compute_hash()
+            ops.append(UpdateOne({'_hash': doc['_hash']}, {'$set': doc}, upsert=True))
 
-            try:
-                result = self.collection.update_one(
-                    {'_hash': doc['_hash']},
-                    {'$set': doc},
-                    upsert=True
-                )
-                if result.upserted_id or result.modified_count > 0:
-                    inserted_count += 1
-            except DuplicateKeyError:
-                pass
-
-        return inserted_count
+        try:
+            result = self.collection.bulk_write(ops, ordered=False)
+            return result.upserted_count + result.modified_count
+        except BulkWriteError as exc:
+            # Partial success — return what was written
+            details = exc.details
+            n_upserted: int = details.get('nUpserted', 0)
+            n_modified: int = details.get('nModified', 0)
+            return n_upserted + n_modified
 
     def exists(self, point_hash: str) -> bool:
         """
