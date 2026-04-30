@@ -123,6 +123,7 @@ class TestPython3Imports(unittest.TestCase):
     def test_import_constants(self):
         """Test importing constants module"""
         try:
+            import constants  # noqa: F401
             self.assertTrue(True)
         except SyntaxError as e:
             self.fail(f"constants.py has Python 2 syntax errors: {e}")
@@ -130,6 +131,7 @@ class TestPython3Imports(unittest.TestCase):
     def test_import_util(self):
         """Test importing util module"""
         try:
+            import util  # noqa: F401
             self.assertTrue(True)
         except SyntaxError as e:
             self.fail(f"util.py has Python 2 syntax errors: {e}")
@@ -137,6 +139,7 @@ class TestPython3Imports(unittest.TestCase):
     def test_import_mongo(self):
         """Test importing mongo module"""
         try:
+            import mongo  # noqa: F401
             self.assertTrue(True)
         except SyntaxError as e:
             self.fail(f"mongo.py has Python 2 syntax errors: {e}")
@@ -144,6 +147,7 @@ class TestPython3Imports(unittest.TestCase):
     def test_import_classes(self):
         """Test importing classes module"""
         try:
+            import classes  # noqa: F401
             self.assertTrue(True)
         except SyntaxError as e:
             self.fail(f"classes.py has Python 2 syntax errors: {e}")
@@ -151,6 +155,7 @@ class TestPython3Imports(unittest.TestCase):
     def test_import_computed(self):
         """Test importing computed module"""
         try:
+            import computed  # noqa: F401
             self.assertTrue(True)
         except SyntaxError as e:
             self.fail(f"computed.py has Python 2 syntax errors: {e}")
@@ -158,6 +163,7 @@ class TestPython3Imports(unittest.TestCase):
     def test_import_process_stops(self):
         """Test importing processStops module"""
         try:
+            import processStops  # noqa: F401
             self.assertTrue(True)
         except SyntaxError as e:
             self.fail(f"processStops.py has Python 2 syntax errors: {e}")
@@ -165,6 +171,7 @@ class TestPython3Imports(unittest.TestCase):
     def test_import_process_vehicles(self):
         """Test importing processVehicles module"""
         try:
+            import processVehicles  # noqa: F401
             self.assertTrue(True)
         except SyntaxError as e:
             self.fail(f"processVehicles.py has Python 2 syntax errors: {e}")
@@ -172,6 +179,7 @@ class TestPython3Imports(unittest.TestCase):
     def test_import_input_output(self):
         """Test importing inputOutput module"""
         try:
+            import inputOutput  # noqa: F401
             self.assertTrue(True)
         except SyntaxError as e:
             self.fail(f"inputOutput.py has Python 2 syntax errors: {e}")

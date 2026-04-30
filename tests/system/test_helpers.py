@@ -109,7 +109,7 @@ def generate_gps_route(truck_id, date_num, num_stops=3):
         stop_lon = base_lon + (stop_idx * 0.01)
 
         num_points_at_stop = 15 + (stop_idx * 2)
-        12 + (stop_idx * 3)  # 12, 15, 18 minutes
+        stop_duration_minutes = 12 + (stop_idx * 3)  # noqa: F841
 
         for point_idx in range(num_points_at_stop):
             jitter_lat = (point_idx % 3 - 1) * 0.00002
