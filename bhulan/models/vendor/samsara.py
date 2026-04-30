@@ -10,13 +10,13 @@ from bhulan.ingestion.normalize import MappingPlan
 def create_samsara_mapping() -> MappingPlan:
     """
     Create mapping plan for Samsara GPS data.
-    
+
     Samsara format typically includes nested structure:
     - device.id: Device ID
     - timestamp: Epoch milliseconds
     - location.lat, location.lng: Coordinates
     - vehicle.speedKph: Speed in km/h
-    
+
     Returns:
         MappingPlan for Samsara data
     """
@@ -37,11 +37,11 @@ def create_samsara_mapping() -> MappingPlan:
         'heading': 'heading_deg',
         'bearing': 'heading_deg',
     }
-    
+
     unit_map = {
         'speed_mps': 'kph',  # Samsara uses km/h
     }
-    
+
     return MappingPlan(
         field_map=field_map,
         unit_map=unit_map,

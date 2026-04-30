@@ -183,8 +183,8 @@ def detect_hotspots(
         centroid_lon = float(np.mean([lons[i] for i in idxs]))
 
         ts_samples = [points[i].ts_utc for i in idxs if points[i].ts_utc is not None]
-        first_ts = min(ts_samples) if ts_samples else None
-        last_ts = max(ts_samples) if ts_samples else None
+        first_ts = min(ts_samples) if ts_samples else None  # type: ignore[type-var]
+        last_ts = max(ts_samples) if ts_samples else None  # type: ignore[type-var]
 
         hotspots.append(
             Hotspot(

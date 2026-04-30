@@ -2355,6 +2355,17 @@ rich = ">=10.11.0"
 shellingham = ">=1.3.0"
 
 [[package]]
+name = "types-python-dateutil"
+version = "2.9.0.20260408"
+description = "Typing stubs for python-dateutil"
+optional = false
+python-versions = ">=3.10"
+files = [
+    {file = "types_python_dateutil-2.9.0.20260408-py3-none-any.whl", hash = "sha256:473139d514a71c9d1fbd8bb328974bedcb1cc3dba57aad04ffa4157f483c216f"},
+    {file = "types_python_dateutil-2.9.0.20260408.tar.gz", hash = "sha256:8b056ec01568674235f64ecbcef928972a5fac412f5aab09c516dfa2acfbb582"},
+]
+
+[[package]]
 name = "typing-extensions"
 version = "4.15.0"
 description = "Backported and Experimental Type Hints for Python 3.9+"
@@ -2807,4 +2818,4 @@ s3 = ["boto3"]
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.10"
-content-hash = "c56cc96b77937ef1d931e4768520d6569563aa615bdc2ac0cf630a8e26ffb34c"
+content-hash = "c0714b246b820b06db85ef3a9786b00f004570adfe652ac44923bd0376068b78"

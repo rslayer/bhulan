@@ -4,8 +4,8 @@ Pytest configuration and shared fixtures.
 Provides common fixtures and configuration for all tests.
 """
 
+
 import pytest
-import os
 
 
 def pytest_configure(config):
@@ -42,7 +42,7 @@ def pytest_collection_modifyitems(config, items):
         mongodb_available = True
     except Exception:
         mongodb_available = False
-    
+
     if not mongodb_available:
         skip_mongo = pytest.mark.skip(reason="MongoDB not available")
         for item in items:

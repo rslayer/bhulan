@@ -65,7 +65,7 @@ app.add_middleware(
 # a 429 instead of melting the box. slowapi attaches itself through app.state.
 limiter = Limiter(key_func=get_remote_address, default_limits=[])
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
 
 app.include_router(insights_router)
 app.include_router(compare_router)
@@ -189,6 +189,9 @@ async def ingest_trackpoints(
     Returns:
         NormalizationResult with accepted/rejected counts and errors
     """
+    if track_repo is None or job_registry is None:
+        raise HTTPException(status_code=503, detail="MongoDB is not available")
+
     if ingest_id is None:
         ingest_id = str(uuid.uuid4())
 
@@ -250,6 +253,9 @@ async def get_job_status(ingest_id: str):
     Returns:
         Job information including status, stats, and errors
     """
+    if track_repo is None or job_registry is None:
+        raise HTTPException(status_code=503, detail="MongoDB is not available")
+
     job = job_registry.get_job(ingest_id)
 
     if job is None:

@@ -62,9 +62,9 @@ def _parse_ts(val: Any) -> Optional[datetime]:
             return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
         except ValueError:
             try:
-                from dateutil import parser  # type: ignore
+                from dateutil import parser as dateutil_parser
 
-                dt = parser.parse(text)
+                dt = dateutil_parser.parse(text)
                 return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
             except Exception:
                 return None
