@@ -59,8 +59,12 @@ class MongoTrackPointRepository(TrackPointRepository):
             result = self.collection.bulk_write(ops, ordered=False)
             return result.upserted_count + result.modified_count
         except BulkWriteError as exc:
-            # Partial success — return what was written
             details = exc.details
+            write_errors = details.get('writeErrors', [])
+            non_dup_errors = [e for e in write_errors if e.get('code') != 11000]
+            if non_dup_errors:
+                raise
+            # All errors are duplicate-key — return partial success count
             n_upserted: int = details.get('nUpserted', 0)
             n_modified: int = details.get('nModified', 0)
             return n_upserted + n_modified
