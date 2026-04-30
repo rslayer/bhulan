@@ -24,7 +24,7 @@ class StructuredFormatter(logging.Formatter):
             JSON-formatted log string
         """
         log_data = {
-            'timestamp': datetime.now(timezone.utc).isoformat(),
+            'timestamp': datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'),
             'level': record.levelname,
             'logger': record.name,
             'message': record.getMessage(),
