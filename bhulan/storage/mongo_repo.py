@@ -62,9 +62,9 @@ class MongoTrackPointRepository(TrackPointRepository):
             details = exc.details
             write_errors = details.get('writeErrors', [])
             non_dup_errors = [e for e in write_errors if e.get('code') != 11000]
-            if non_dup_errors:
+            if non_dup_errors or details.get('writeConcernErrors'):
                 raise
-            # All errors are duplicate-key — return partial success count
+            # Only duplicate-key errors — return partial success count
             n_upserted: int = details.get('nUpserted', 0)
             n_modified: int = details.get('nModified', 0)
             return n_upserted + n_modified
