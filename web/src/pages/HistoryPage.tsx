@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { History as HistoryIcon, RotateCw, Trash2 } from "lucide-react";
+import { LoadingSkeleton } from "@/components/LoadingSkeleton";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -51,9 +52,11 @@ export function HistoryPage() {
 
   if (authLoading) {
     return (
-      <div className="rounded-lg border border-slate-200 bg-white p-6 text-sm text-slate-500">
-        Loading…
-      </div>
+      <Card>
+        <CardContent className="py-6">
+          <LoadingSkeleton lines={4} />
+        </CardContent>
+      </Card>
     );
   }
 
@@ -140,6 +143,7 @@ export function HistoryPage() {
               {error}
             </div>
           )}
+          {loading && entries.length === 0 && <LoadingSkeleton lines={5} />}
           {entries.length === 0 && !loading && (
             <div className="text-sm text-slate-500">
               No runs yet. Compute insights on the Insights tab and they&rsquo;ll

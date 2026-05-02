@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { GitCompareArrows, History, Map, Sparkles } from "lucide-react";
 import { AuthProvider, useAuth } from "@/components/AuthProvider";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { PrivacyDialog } from "@/components/PrivacyDialog";
 import { UserMenu } from "@/components/UserMenu";
 import { ComparePage } from "@/pages/ComparePage";
@@ -88,10 +89,26 @@ function AppShell() {
         </div>
       </header>
       <main className="mx-auto max-w-6xl px-4 py-6">
-        {tab === "insights" && <InsightsPage />}
-        {tab === "plot" && <PlotPage />}
-        {tab === "compare" && <ComparePage />}
-        {tab === "history" && <HistoryPage />}
+        {tab === "insights" && (
+          <ErrorBoundary label="Insights">
+            <InsightsPage />
+          </ErrorBoundary>
+        )}
+        {tab === "plot" && (
+          <ErrorBoundary label="Plot">
+            <PlotPage />
+          </ErrorBoundary>
+        )}
+        {tab === "compare" && (
+          <ErrorBoundary label="Compare">
+            <ComparePage />
+          </ErrorBoundary>
+        )}
+        {tab === "history" && (
+          <ErrorBoundary label="History">
+            <HistoryPage />
+          </ErrorBoundary>
+        )}
       </main>
       <footer className="mx-auto max-w-6xl px-4 py-8 text-xs text-slate-500">
         <span>
