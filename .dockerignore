@@ -13,3 +13,6 @@ tests
 sampledata
 *.md
 !README.md
+.claude
+*.tsbuildinfo
+web/*.tsbuildinfo

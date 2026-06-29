@@ -11,6 +11,12 @@ An open-source GPS data processing and mobility insights platform.
 * [Poetry 1.8+](https://python-poetry.org/docs/#installation)
 * MongoDB is **not** required for the public analytics surface (`/v1/insights`, `/v1/plot`, `/v1/compare`). It is only needed for the legacy ingestion endpoints (`/ingest/trackpoints`, `/jobs/*`).
 
+## Public demo
+
+Bhulan is designed to launch as a free, stateless open-source demo: pasted coordinates and uploaded files are processed in memory and are not stored when auth/history is disabled. See [PUBLIC_DEMO.md](PUBLIC_DEMO.md) for the recommended privacy-safe launch mode.
+
+The fastest hosted path is Render using the included `render.yaml` and `Dockerfile`. The single container builds the React app, serves it through FastAPI, and exposes `/v1/healthz` for health checks.
+
 ## Quick start
 
 ```bash
@@ -57,14 +63,14 @@ File upload (`/v1/parse/file`) supports GPX, KML, and FIT formats.
 ## Running tests
 
 ```bash
-# All backend tests
-poetry run pytest
+# All backend tests (Mongo integration tests skip when Mongo is unavailable)
+poetry run pytest --no-cov -q
 
 # Analytics + API tests only (what CI runs)
-poetry run pytest tests/unit/analytics tests/integration/test_insights_api.py --no-cov -q
+poetry run pytest tests/unit/ tests/integration/test_insights_api.py --no-cov -q
 
-# Frontend typecheck + build
-cd web && npm run build
+# Frontend typecheck + build + tests
+cd web && npm run build && npm test
 ```
 
 ## Docker
@@ -73,7 +79,7 @@ cd web && npm run build
 docker compose up          # Builds and runs the full app at http://localhost:8000
 ```
 
-See [DEPLOY.md](DEPLOY.md) for production deployment to Fly.io.
+See [DEPLOY.md](DEPLOY.md) for Render, Fly.io, and split frontend/API deployment options.
 
 ## Project structure
 

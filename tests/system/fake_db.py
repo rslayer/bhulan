@@ -34,11 +34,12 @@ class FakeCursor:
         items = self.items
 
         if self._sort_key:
-            items = sorted(items, key=lambda x: x.get(self._sort_key, 0),
-                          reverse=(self._sort_order == -1))
+            items = sorted(
+                items, key=lambda x: x.get(self._sort_key, 0), reverse=(self._sort_order == -1)
+            )
 
         if self._limit_count is not None:
-            items = items[:self._limit_count]
+            items = items[: self._limit_count]
 
         return iter(items)
 
@@ -70,16 +71,63 @@ class FakeCollection:
 
         return FakeCursor(matching)
 
-    def find_one(self, query=None):
+    def find_one(self, query=None, projection=None):
         """Find first document matching query"""
         if query is None:
             query = {}
 
         for doc in self.documents:
             if self._matches_query(doc, query):
+                if projection:
+                    return self._apply_projection(doc, projection)
                 return copy.deepcopy(doc)
 
         return None
+
+    def create_index(self, *args, **kwargs):
+        """Accept index declarations; uniqueness is not enforced by the fake."""
+        return None
+
+    def count_documents(self, query=None, limit=0):
+        """Count documents matching query."""
+        if query is None:
+            query = {}
+        count = sum(1 for doc in self.documents if self._matches_query(doc, query))
+        return min(count, limit) if limit else count
+
+    def insert_one(self, doc):
+        """Insert a single document."""
+        self._insert_one(doc)
+
+    def update_one(self, query, update, upsert=False):
+        """Apply a minimal $set update to the first matching document."""
+        for doc in self.documents:
+            if self._matches_query(doc, query):
+                doc.update(update.get("$set", {}))
+                return None
+        if upsert:
+            new_doc = copy.deepcopy(query)
+            new_doc.update(update.get("$set", {}))
+            self._insert_one(new_doc)
+        return None
+
+    def bulk_write(self, ops, ordered=False):
+        """Apply minimal UpdateOne operations and return pymongo-like counts."""
+        upserted = 0
+        modified = 0
+        for op in ops:
+            before = len(self.documents)
+            self.update_one(op.query, op.update, upsert=op.upsert)
+            if len(self.documents) > before:
+                upserted += 1
+            else:
+                modified += 1
+
+        class Result:
+            upserted_count = upserted
+            modified_count = modified
+
+        return Result()
 
     def insert(self, docs):
         """Insert one or more documents"""
@@ -92,16 +140,16 @@ class FakeCollection:
     def _insert_one(self, doc):
         """Insert a single document"""
         doc_copy = copy.deepcopy(doc)
-        if '_id' not in doc_copy:
-            doc_copy['_id'] = self._id_counter
+        if "_id" not in doc_copy:
+            doc_copy["_id"] = self._id_counter
             self._id_counter += 1
         self.documents.append(doc_copy)
 
     def save(self, doc):
         """Save document (update if _id exists, insert otherwise)"""
-        if '_id' in doc:
+        if "_id" in doc:
             for i, existing in enumerate(self.documents):
-                if existing.get('_id') == doc['_id']:
+                if existing.get("_id") == doc["_id"]:
                     self.documents[i] = copy.deepcopy(doc)
                     return
 
@@ -112,8 +160,7 @@ class FakeCollection:
         if query is None:
             self.documents = []
         else:
-            self.documents = [doc for doc in self.documents
-                            if not self._matches_query(doc, query)]
+            self.documents = [doc for doc in self.documents if not self._matches_query(doc, query)]
 
     def distinct(self, key):
         """Get distinct values for a key"""
@@ -132,8 +179,8 @@ class FakeCollection:
 
     def _apply_projection(self, doc, projection):
         """Apply projection to document"""
-        if '_id' in projection and projection['_id'] == 0:
-            result = {k: v for k, v in doc.items() if k != '_id'}
+        if "_id" in projection and projection["_id"] == 0:
+            result = {k: v for k, v in doc.items() if k != "_id"}
         else:
             result = copy.deepcopy(doc)
         return result
@@ -156,7 +203,7 @@ class FakeDatabase:
 class FakeMongoClient:
     """Mimics pymongo MongoClient"""
 
-    def __init__(self):
+    def __init__(self, *args, **kwargs):
         self.databases = {}
 
     def __getitem__(self, db_name):

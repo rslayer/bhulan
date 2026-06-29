@@ -16,12 +16,30 @@ def setup_stubs():
 
     from tests.system.fake_db import FakeMongoClient
 
-    pymongo = types.ModuleType('pymongo')
-    pymongo.MongoClient = FakeMongoClient
-    sys.modules['pymongo'] = pymongo
+    pymongo = types.ModuleType("pymongo")
 
-    geopy = types.ModuleType('geopy')
-    geocoders = types.ModuleType('geopy.geocoders')
+    class MockUpdateOne:
+        def __init__(self, query, update, upsert=False):
+            self.query = query
+            self.update = update
+            self.upsert = upsert
+
+    class MockBulkWriteError(Exception):
+        def __init__(self, details=None):
+            super().__init__(details or {})
+            self.details = details or {}
+
+    pymongo.ASCENDING = 1
+    pymongo.GEOSPHERE = "2dsphere"
+    pymongo.MongoClient = FakeMongoClient
+    pymongo.UpdateOne = MockUpdateOne
+    pymongo_errors = types.ModuleType("pymongo.errors")
+    pymongo_errors.BulkWriteError = MockBulkWriteError
+    sys.modules["pymongo"] = pymongo
+    sys.modules["pymongo.errors"] = pymongo_errors
+
+    geopy = types.ModuleType("geopy")
+    geocoders = types.ModuleType("geopy.geocoders")
 
     class MockNominatim:
         def __init__(self, *args, **kwargs):
@@ -30,17 +48,18 @@ def setup_stubs():
         def reverse(self, coords, timeout=10):
             class MockLocation:
                 address = "Test Address, Test City"
+
             return MockLocation()
 
     geocoders.Nominatim = MockNominatim
-    sys.modules['geopy'] = geopy
-    sys.modules['geopy.geocoders'] = geocoders
+    sys.modules["geopy"] = geopy
+    sys.modules["geopy.geocoders"] = geocoders
 
-    xlrd = types.ModuleType('xlrd')
+    xlrd = types.ModuleType("xlrd")
     xlrd.xldate_as_tuple = lambda value, datemode: (2014, 8, 11, 0, 0, 0)
-    sys.modules['xlrd'] = xlrd
+    sys.modules["xlrd"] = xlrd
 
-    requests = types.ModuleType('requests')
+    requests = types.ModuleType("requests")
 
     class MockResponse:
         text = "Mock response"
@@ -49,9 +68,9 @@ def setup_stubs():
         return MockResponse()
 
     requests.post = mock_post
-    sys.modules['requests'] = requests
+    sys.modules["requests"] = requests
 
-    gridfs = types.ModuleType('gridfs')
+    gridfs = types.ModuleType("gridfs")
 
     class MockGridFS:
         def __init__(self, *args, **kwargs):
@@ -70,7 +89,7 @@ def setup_stubs():
             pass
 
     gridfs.GridFS = MockGridFS
-    sys.modules['gridfs'] = gridfs
+    sys.modules["gridfs"] = gridfs
 
 
 def generate_gps_route(truck_id, date_num, num_stops=3):
@@ -126,7 +145,7 @@ def generate_gps_route(truck_id, date_num, num_stops=3):
                 DIRECTION_KEY: 0,
                 TEMPERATURE_KEY: 20.0,
                 COMMUNE_KEY: "Test Commune",
-                TIMESTAMP_KEY: current_time.isoformat()
+                TIMESTAMP_KEY: current_time.isoformat(),
             }
             points.append(point)
 
@@ -151,7 +170,7 @@ def generate_gps_route(truck_id, date_num, num_stops=3):
                     DIRECTION_KEY: 45,
                     TEMPERATURE_KEY: 20.0,
                     COMMUNE_KEY: "Test Commune",
-                    TIMESTAMP_KEY: current_time.isoformat()
+                    TIMESTAMP_KEY: current_time.isoformat(),
                 }
                 points.append(point)
 
@@ -208,7 +227,7 @@ def generate_single_stop_route(truck_id, date_num, duration_minutes=15):
             DIRECTION_KEY: 0,
             TEMPERATURE_KEY: 20.0,
             COMMUNE_KEY: "Test Commune",
-            TIMESTAMP_KEY: current_time.isoformat()
+            TIMESTAMP_KEY: current_time.isoformat(),
         }
         points.append(point)
 
@@ -227,7 +246,7 @@ def assert_stop_near(stop, expected_lat, expected_lon, tolerance=0.001):
         expected_lon: Expected longitude
         tolerance: Acceptable distance tolerance in degrees (~100m)
     """
-    point = stop['point']
+    point = stop["point"]
     lat_diff = abs(point.lat - expected_lat)
     lon_diff = abs(point.lon - expected_lon)
 
@@ -245,4 +264,6 @@ def assert_duration_near(actual_minutes, expected_minutes, tolerance=2):
         tolerance: Acceptable tolerance in minutes
     """
     diff = abs(actual_minutes - expected_minutes)
-    assert diff <= tolerance, f"Duration {actual_minutes} not near {expected_minutes} (diff: {diff})"
+    assert (
+        diff <= tolerance
+    ), f"Duration {actual_minutes} not near {expected_minutes} (diff: {diff})"

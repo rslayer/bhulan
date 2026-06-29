@@ -14,6 +14,7 @@ class Settings(BaseSettings):
 
     MONGO_URI: str = "mongodb://localhost:27017"
     MONGO_DB_NAME: str = "bhulan"
+    MONGO_SERVER_SELECTION_TIMEOUT_MS: int = 2000
 
     MAX_BATCH_SIZE: int = 1000
     MAX_INFLIGHT_JOBS: int = 10
@@ -62,7 +63,7 @@ class Settings(BaseSettings):
     BHULAN_MAGIC_LINK_TTL_MIN: int = 15
     BHULAN_SESSION_TTL_DAYS: int = 30
     # Public URL the magic link should point at. The backend composes
-    # "{FRONTEND_URL}/#token=<magic>" and emails / logs that.
+    # "{FRONTEND_URL}/#magic=<token>" and emails / logs that.
     FRONTEND_URL: str = "http://localhost:5173"
     # When true, the magic-link token is logged to stdout AND returned in
     # the /v1/auth/request response so a local developer can copy it

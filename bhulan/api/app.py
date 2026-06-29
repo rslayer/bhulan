@@ -4,12 +4,14 @@ FastAPI application for GPS data ingestion.
 Provides REST API endpoints for webhook ingestion, job status, and health checks.
 """
 
+import json
 import os
 import uuid
 from typing import Any, Dict, List, Optional, Union
 
 from fastapi import Body, Depends, FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -21,7 +23,7 @@ from bhulan.api.routes.history import router as history_router
 from bhulan.api.routes.insights import router as insights_router
 from bhulan.auth import db as auth_db
 from bhulan.config.settings import settings
-from bhulan.ingestion.normalize import normalize_batch
+from bhulan.ingestion.normalize import MappingPlan, normalize_batch
 from bhulan.models.canonical import NormalizationResult
 from bhulan.models.vendor.generic import create_generic_mapping
 from bhulan.models.vendor.geotab import create_geotab_mapping
@@ -31,8 +33,8 @@ from bhulan.storage.mongo_repo import MongoJobRegistry, MongoTrackPointRepositor
 app = FastAPI(
     title="Bhulan GPS API",
     description="Mobility insights and map plotting for GPS coordinates, "
-                "plus ingestion endpoints for vendor feeds.",
-    version="2.1.0"
+    "plus ingestion endpoints for vendor feeds.",
+    version="2.1.0",
 )
 
 
@@ -108,14 +110,16 @@ async def healthz() -> Dict[str, str]:
 
 def _maybe_repo() -> Optional["MongoTrackPointRepository"]:
     """
-    Build a Mongo repo lazily.
+    Build a Mongo repo lazily and ensure production indexes exist.
 
     The insights endpoints don't need Mongo, and we don't want the service to
     fail to start when Mongo isn't available. Ingestion endpoints handle a
     missing repo by returning 503.
     """
     try:
-        return MongoTrackPointRepository()
+        repo = MongoTrackPointRepository()
+        repo.create_indexes()
+        return repo
     except Exception:
         return None
 
@@ -137,6 +141,42 @@ def verify_api_key(x_api_key: Optional[str] = Header(None)) -> None:
         raise HTTPException(status_code=401, detail="Invalid API key")
 
 
+def _mapping_from_header(raw: Optional[str], fallback: MappingPlan) -> MappingPlan:
+    """Parse an optional JSON mapping override from X-Bhulan-Mapping.
+
+    Expected shape: {"field_map": {...}, "unit_map": {...}, "defaults": {...}, "vendor": "custom"}.
+    Missing keys fall back to the selected vendor mapping.
+    """
+    if not raw:
+        return fallback
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=400, detail="Invalid X-Bhulan-Mapping JSON") from exc
+    if not isinstance(data, dict):
+        raise HTTPException(status_code=400, detail="X-Bhulan-Mapping must be a JSON object")
+
+    field_map = data.get("field_map", fallback.field_map)
+    unit_map = data.get("unit_map", fallback.unit_map)
+    defaults = data.get("defaults", fallback.defaults)
+    vendor = data.get("vendor", fallback.vendor)
+    if not isinstance(field_map, dict):
+        raise HTTPException(status_code=400, detail="X-Bhulan-Mapping.field_map must be an object")
+    if not isinstance(unit_map, dict):
+        raise HTTPException(status_code=400, detail="X-Bhulan-Mapping.unit_map must be an object")
+    if not isinstance(defaults, dict):
+        raise HTTPException(status_code=400, detail="X-Bhulan-Mapping.defaults must be an object")
+    if not isinstance(vendor, str):
+        raise HTTPException(status_code=400, detail="X-Bhulan-Mapping.vendor must be a string")
+
+    return MappingPlan(
+        field_map={str(k): str(v) for k, v in field_map.items()},
+        unit_map={str(k): str(v) for k, v in unit_map.items()},
+        defaults=defaults,
+        vendor=vendor,
+    )
+
+
 @app.get("/health/ready")
 async def health_check():
     """
@@ -152,7 +192,7 @@ async def health_check():
 
 
 @app.get("/config")
-async def get_config():
+async def get_config(_: None = Depends(verify_api_key)):
     """
     Get non-sensitive configuration.
 
@@ -173,7 +213,7 @@ async def ingest_trackpoints(
     vendor: str = Query("generic", description="Vendor/source identifier"),
     ingest_id: Optional[str] = Query(None, description="Ingestion job ID"),
     x_bhulan_mapping: Optional[str] = Header(None, description="Custom mapping JSON"),
-    _: None = Depends(verify_api_key)
+    _: None = Depends(verify_api_key),
 ):
     """
     Ingest GPS track points via webhook.
@@ -200,21 +240,27 @@ async def ingest_trackpoints(
     else:
         records = payload
 
+    if len(records) > settings.MAX_BATCH_SIZE:
+        raise HTTPException(
+            status_code=413,
+            detail=f"Too many records: {len(records)} > {settings.MAX_BATCH_SIZE}",
+        )
+
+    if vendor == "geotab":
+        mapping = create_geotab_mapping()
+    elif vendor == "samsara":
+        mapping = create_samsara_mapping()
+    else:
+        mapping = create_generic_mapping()
+    mapping = _mapping_from_header(x_bhulan_mapping, mapping)
+
     job_registry.create_job(
         ingest_id=ingest_id,
-        source='webhook',
-        params={'vendor': vendor, 'record_count': len(records)}
+        source="webhook",
+        params={"vendor": vendor, "record_count": len(records)},
     )
 
     try:
-        if vendor == 'geotab':
-            mapping = create_geotab_mapping()
-        elif vendor == 'samsara':
-            mapping = create_samsara_mapping()
-        else:
-            mapping = create_generic_mapping()
-
-
         result, points = normalize_batch(records, mapping, ingest_id)
 
         if points:
@@ -222,28 +268,22 @@ async def ingest_trackpoints(
 
         job_registry.update_job_status(
             ingest_id=ingest_id,
-            status='succeeded' if result.rejected == 0 else 'partial',
-            stats={
-                'read': len(records),
-                'accepted': result.accepted,
-                'rejected': result.rejected
-            },
-            error_sample=dict(list(result.errors.items())[:10])
+            status="succeeded" if result.rejected == 0 else "partial",
+            stats={"read": len(records), "accepted": result.accepted, "rejected": result.rejected},
+            error_sample=dict(list(result.errors.items())[:10]),
         )
 
         return result
 
     except Exception as e:
         job_registry.update_job_status(
-            ingest_id=ingest_id,
-            status='failed',
-            error_sample={0: str(e)}
+            ingest_id=ingest_id, status="failed", error_sample={0: str(e)}
         )
         raise HTTPException(status_code=500, detail=f"Ingestion failed: {str(e)}")
 
 
 @app.get("/jobs/{ingest_id}")
-async def get_job_status(ingest_id: str):
+async def get_job_status(ingest_id: str, _: None = Depends(verify_api_key)):
     """
     Get ingestion job status and statistics.
 
@@ -262,25 +302,37 @@ async def get_job_status(ingest_id: str):
         raise HTTPException(status_code=404, detail=f"Job {ingest_id} not found")
 
     point_count = track_repo.count_by_ingest_id(ingest_id)
-    job['point_count_in_db'] = point_count
+    job["point_count_in_db"] = point_count
 
     return job
 
 
-@app.get("/metrics")
-async def get_metrics():
-    """
-    Get Prometheus-compatible metrics.
-
-    Returns basic metrics about ingestion operations.
-    """
+@app.get("/metrics", response_class=PlainTextResponse)
+async def get_metrics(_: None = Depends(verify_api_key)) -> str:
+    """Get Prometheus-compatible process health metrics."""
     if not settings.ENABLE_PROMETHEUS:
         raise HTTPException(status_code=404, detail="Metrics not enabled")
 
-    return {
-        "message": "Prometheus metrics endpoint",
-        "note": "Full metrics implementation pending"
-    }
+    mongo_available = 0
+    if track_repo is not None:
+        try:
+            track_repo.collection.database.client.server_info()
+            mongo_available = 1
+        except Exception:
+            mongo_available = 0
+
+    auth_enabled = 1 if settings.BHULAN_AUTH_ENABLED else 0
+    return (
+        "# HELP bhulan_up Whether the Bhulan API process is serving requests.\n"
+        "# TYPE bhulan_up gauge\n"
+        "bhulan_up 1\n"
+        "# HELP bhulan_mongo_available Whether MongoDB is reachable for ingestion.\n"
+        "# TYPE bhulan_mongo_available gauge\n"
+        f"bhulan_mongo_available {mongo_available}\n"
+        "# HELP bhulan_auth_enabled Whether optional auth/history is enabled.\n"
+        "# TYPE bhulan_auth_enabled gauge\n"
+        f"bhulan_auth_enabled {auth_enabled}\n"
+    )
 
 
 # Mount the built SPA last so API routes registered above always win. When the
@@ -294,9 +346,7 @@ if os.path.isdir(_web_dist):
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(
-        app,
-        host=settings.API_HOST,
-        port=settings.API_PORT,
-        log_level=settings.LOG_LEVEL.lower()
+        app, host=settings.API_HOST, port=settings.API_PORT, log_level=settings.LOG_LEVEL.lower()
     )

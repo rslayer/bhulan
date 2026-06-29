@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: bhulan
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /v1/healthz
+    envVars:
+      - key: ALLOWED_ORIGINS
+        value: "*"
+      - key: BHULAN_AUTH_ENABLED
+        value: "false"
+      - key: ENABLE_PROMETHEUS
+        value: "true"
+      - key: RATE_LIMIT_INSIGHTS
+        value: 30/minute
+      - key: RATE_LIMIT_PLOT
+        value: 60/minute
+      - key: WEB_DIST_DIR
+        value: /app/web/dist

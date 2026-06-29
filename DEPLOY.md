@@ -1,82 +1,67 @@
 # Deploying Bhulan
 
-The public `/v1` surface runs anywhere Python 3.10+ can host a FastAPI
-app. For a self-hosted production deploy we use:
+The recommended public launch is a stateless, single-container web app: FastAPI serves the `/v1` API and the built React app from `web/dist`. MongoDB and auth/history stay disabled, so the demo can run as a free open-source tool without storing user GPS data.
 
-- **Backend**: Fly.io, via the bundled `fly.toml` + the stage-2 runtime
-  section of `Dockerfile`.
-- **Frontend**: static hosting (any CDN). The Vite bundle is fully
-  client-side; point it at the backend origin via `VITE_BACKEND_URL`
-  at build time.
+## Recommended: Render free web service
 
-Both halves are stateless. MongoDB is only required for the legacy
-`/ingest/trackpoints` + `/jobs/*` endpoints; skip it for the public
-insights app.
+This repo includes a `render.yaml` blueprint and a Dockerfile that works with Render's `PORT` environment variable.
 
-## Backend — Fly.io
+1. Push the repo to GitHub.
+2. In Render, create a new Blueprint from the repo, or create a Web Service and choose Docker.
+3. Use the included `render.yaml` values.
+4. Deploy and verify `/v1/healthz`, `/docs`, and `/`.
+
+Recommended public-demo environment variables:
+
+| Var | Value | Notes |
+| --- | --- | --- |
+| `ALLOWED_ORIGINS` | `*` | Good for the single-container demo and public API. |
+| `BHULAN_AUTH_ENABLED` | `false` | Keeps accounts/history off. |
+| `ENABLE_PROMETHEUS` | `true` | Exposes simple process metrics at `/metrics`. |
+| `RATE_LIMIT_INSIGHTS` | `30/minute` | Per-IP slowapi limit. |
+| `RATE_LIMIT_PLOT` | `60/minute` | Per-IP slowapi limit. |
+| `WEB_DIST_DIR` | `/app/web/dist` | Where the Docker image copies the Vite bundle. |
+
+Health checks should use `/v1/healthz`, not `/health/ready`. The latter checks MongoDB and is only relevant for the legacy ingestion subsystem.
+
+## Privacy-safe public demo mode
+
+Use [PUBLIC_DEMO.md](PUBLIC_DEMO.md) as the public operations note. In this mode:
+
+- `/v1/insights`, `/v1/plot/validate`, `/v1/compare`, and `/v1/parse/file` are stateless.
+- Uploaded/pasted GPS data is processed in memory for the request and is not persisted by Bhulan.
+- `/v1/auth/*` and `/v1/history/*` return unavailable unless `BHULAN_AUTH_ENABLED=true`.
+- Mongo-backed `/ingest/trackpoints` and `/jobs/*` are only useful when MongoDB is configured.
+
+Avoid enabling request-body logging at your host or reverse proxy if you run a public demo.
+
+## Optional: split frontend and API
+
+For higher static traffic, host the frontend separately and keep FastAPI as an API service.
 
 ```bash
-# One-time: provision the app from the repo root.
-flyctl launch --copy-config --dockerfile Dockerfile --no-deploy
+cd web
+VITE_BACKEND_URL=https://<your-api-host> npm run build
+```
 
-# Deploys going forward:
+Upload `web/dist` to Cloudflare Pages, Netlify, Vercel static hosting, S3+CloudFront, or GitHub Pages. Set `ALLOWED_ORIGINS` on the API to the exact frontend origin when you move away from the wildcard default.
+
+## Optional: Fly.io
+
+Fly.io is still supported by `fly.toml`:
+
+```bash
+flyctl launch --copy-config --dockerfile Dockerfile --no-deploy
 flyctl deploy
 ```
 
-`fly.toml` declares:
+`fly.toml` runs `uvicorn bhulan.api.app:app --host 0.0.0.0 --port 8080` and can mount `/data` for opt-in SQLite auth/history. Use Fly if you prefer its platform or already have billing set up.
 
-- `internal_port = 8080` — matches `uvicorn --port 8080` in the
-  Procfile.
-- `processes.app = "uvicorn bhulan.api.app:app ..."` — overrides Fly's
-  default FastAPI launcher so we don't depend on the `fastapi` CLI
-  binary. The `fastapi[standard]` extra is pinned anyway so either
-  launcher works.
-- `auto_stop_machines = "stop"` + `min_machines_running = 0` — machines
-  suspend on idle and cold-start on the first request (~3 s). Drop
-  `auto_stop` to a warm fleet if you need sub-second tail latency.
+## Optional: persistence
 
-Env vars worth setting on `flyctl secrets set ...`:
+Only add persistence when the product needs it:
 
-| Var                  | Default      | Notes                                          |
-| -------------------- | ------------ | ---------------------------------------------- |
-| `ALLOWED_ORIGINS`    | `*`          | Comma-separated. Wildcard drops credentials.   |
-| `RATE_LIMIT_INSIGHTS`| `30/minute`  | slowapi syntax.                                |
-| `RATE_LIMIT_PLOT`    | `60/minute`  | slowapi syntax.                                |
-| `API_KEY`            | (unset)      | Only gates the legacy `/ingest/*` endpoints.   |
+- **MongoDB**: required for legacy ingestion endpoints (`/ingest/trackpoints`, `/jobs/*`). Set `MONGO_URI` and protect ingestion/admin endpoints with `API_KEY`.
+- **SQLite auth/history**: set `BHULAN_AUTH_ENABLED=true`, `BHULAN_DB_PATH` to a writable persistent path, and `BHULAN_AUTH_SECRET` to a long random value. Configure SMTP before inviting real users.
 
-## Frontend — static CDN
-
-```bash
-# Build with the public backend URL baked in.
-cd web
-VITE_BACKEND_URL=https://<your-fly-app>.fly.dev npm run build
-
-# Upload web/dist to the CDN of your choice (Netlify, CF Pages, S3+CF,
-# Vercel static, GitHub Pages). No build step is needed on the host.
-```
-
-Because `fetch` calls in the SPA are prefixed with `VITE_BACKEND_URL`,
-a build per target origin is the cleanest option. For single-origin
-deploys (SPA mounted at `/` on the backend), build with
-`VITE_BACKEND_URL=""` — this is what `docker-compose.yml` and the
-`Dockerfile` do.
-
-## CORS
-
-`bhulan/api/app.py` drops `allow_credentials` automatically when
-`ALLOWED_ORIGINS` is the wildcard `*`, so the default config works for
-cross-origin static-frontend deploys. When you lock down origins to a
-specific list, credentials come back on — use this for any future auth
-work that relies on cookies or `Authorization` headers with
-`withCredentials`.
-
-## Live deploy
-
-The current session brought up:
-
-- Backend: `https://bhulan-oivuldkc.fly.dev/` (routes: `/v1/healthz`,
-  `/v1/insights`, `/v1/plot/validate`, `/v1/compare`, `/v1/parse/file`).
-- Frontend: a Devin static-hosting URL that posts to the above.
-
-These are throwaway deploys tied to this session's infra. Re-run
-`flyctl deploy` from your own Fly account to own the app.
+For the first free open-source release, leave both off.

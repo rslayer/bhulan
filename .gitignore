@@ -12,3 +12,6 @@ visualize_palo_alto_standalone.py
 
 # IDE
 .idea/
+
+# Local AI/worktree scratch copies
+.claude/

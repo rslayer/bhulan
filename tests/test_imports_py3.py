@@ -12,9 +12,23 @@ import types
 import unittest
 
 # The legacy modules now live under legacy/ at the repo root.
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'legacy'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "legacy"))
 
-pymongo = types.ModuleType('pymongo')
+pymongo = types.ModuleType("pymongo")
+
+
+class MockUpdateOne:
+    def __init__(self, query, update, upsert=False):
+        self.query = query
+        self.update = update
+        self.upsert = upsert
+
+
+class MockBulkWriteError(Exception):
+    def __init__(self, details=None):
+        super().__init__(details or {})
+        self.details = details or {}
+
 
 class MockMongoClient:
     def __init__(self, *args, **kwargs):
@@ -23,11 +37,29 @@ class MockMongoClient:
     def __getitem__(self, key):
         return MockDatabase()
 
+
 class MockDatabase:
     def __getitem__(self, key):
         return MockCollection()
 
+
 class MockCollection:
+    def create_index(self, *args, **kwargs):
+        return None
+
+    def count_documents(self, *args, **kwargs):
+        return 0
+
+    def bulk_write(self, *args, **kwargs):
+        class Result:
+            upserted_count = 0
+            modified_count = 0
+
+        return Result()
+
+    def update_one(self, *args, **kwargs):
+        return None
+
     def find(self, *args, **kwargs):
         return []
 
@@ -46,10 +78,18 @@ class MockCollection:
     def distinct(self, *args, **kwargs):
         return []
 
-pymongo.MongoClient = MockMongoClient
-sys.modules['pymongo'] = pymongo
 
-gridfs = types.ModuleType('gridfs')
+pymongo.ASCENDING = 1
+pymongo.GEOSPHERE = "2dsphere"
+pymongo.MongoClient = MockMongoClient
+pymongo.UpdateOne = MockUpdateOne
+pymongo_errors = types.ModuleType("pymongo.errors")
+pymongo_errors.BulkWriteError = MockBulkWriteError
+sys.modules["pymongo"] = pymongo
+sys.modules["pymongo.errors"] = pymongo_errors
+
+gridfs = types.ModuleType("gridfs")
+
 
 class MockGridFS:
     def __init__(self, *args, **kwargs):
@@ -67,11 +107,13 @@ class MockGridFS:
     def delete(self, *args, **kwargs):
         pass
 
-gridfs.GridFS = MockGridFS
-sys.modules['gridfs'] = gridfs
 
-geopy = types.ModuleType('geopy')
-geocoders = types.ModuleType('geopy.geocoders')
+gridfs.GridFS = MockGridFS
+sys.modules["gridfs"] = gridfs
+
+geopy = types.ModuleType("geopy")
+geocoders = types.ModuleType("geopy.geocoders")
+
 
 class MockNominatim:
     def __init__(self, *args, **kwargs):
@@ -80,18 +122,22 @@ class MockNominatim:
     def reverse(self, coords, timeout=10):
         class MockLocation:
             address = "Stubbed Address"
+
         return MockLocation()
 
-geocoders.Nominatim = MockNominatim
-sys.modules['geopy'] = geopy
-sys.modules['geopy.geocoders'] = geocoders
 
-xlrd = types.ModuleType('xlrd')
+geocoders.Nominatim = MockNominatim
+sys.modules["geopy"] = geopy
+sys.modules["geopy.geocoders"] = geocoders
+
+xlrd = types.ModuleType("xlrd")
 xlrd.xldate_as_tuple = lambda value, datemode: (1900, 1, 1, 0, 0, 0)
+
 
 class MockWorkbook:
     def sheet_by_name(self, name):
         return MockWorksheet()
+
 
 class MockWorksheet:
     nrows = 1
@@ -100,21 +146,26 @@ class MockWorksheet:
     def row(self, index):
         class MockCell:
             value = 0
+
         return [MockCell() for _ in range(11)]
 
-xlrd.open_workbook = lambda filename: MockWorkbook()
-sys.modules['xlrd'] = xlrd
 
-requests = types.ModuleType('requests')
+xlrd.open_workbook = lambda filename: MockWorkbook()
+sys.modules["xlrd"] = xlrd
+
+requests = types.ModuleType("requests")
+
 
 class MockResponse:
     text = "Mock response"
 
+
 def mock_post(*args, **kwargs):
     return MockResponse()
 
+
 requests.post = mock_post
-sys.modules['requests'] = requests
+sys.modules["requests"] = requests
 
 
 class TestPython3Imports(unittest.TestCase):
@@ -124,6 +175,7 @@ class TestPython3Imports(unittest.TestCase):
         """Test importing constants module"""
         try:
             import constants  # noqa: F401
+
             self.assertTrue(True)
         except SyntaxError as e:
             self.fail(f"constants.py has Python 2 syntax errors: {e}")
@@ -132,6 +184,7 @@ class TestPython3Imports(unittest.TestCase):
         """Test importing util module"""
         try:
             import util  # noqa: F401
+
             self.assertTrue(True)
         except SyntaxError as e:
             self.fail(f"util.py has Python 2 syntax errors: {e}")
@@ -140,6 +193,7 @@ class TestPython3Imports(unittest.TestCase):
         """Test importing mongo module"""
         try:
             import mongo  # noqa: F401
+
             self.assertTrue(True)
         except SyntaxError as e:
             self.fail(f"mongo.py has Python 2 syntax errors: {e}")
@@ -148,6 +202,7 @@ class TestPython3Imports(unittest.TestCase):
         """Test importing classes module"""
         try:
             import classes  # noqa: F401
+
             self.assertTrue(True)
         except SyntaxError as e:
             self.fail(f"classes.py has Python 2 syntax errors: {e}")
@@ -156,6 +211,7 @@ class TestPython3Imports(unittest.TestCase):
         """Test importing computed module"""
         try:
             import computed  # noqa: F401
+
             self.assertTrue(True)
         except SyntaxError as e:
             self.fail(f"computed.py has Python 2 syntax errors: {e}")
@@ -164,6 +220,7 @@ class TestPython3Imports(unittest.TestCase):
         """Test importing processStops module"""
         try:
             import processStops  # noqa: F401
+
             self.assertTrue(True)
         except SyntaxError as e:
             self.fail(f"processStops.py has Python 2 syntax errors: {e}")
@@ -172,6 +229,7 @@ class TestPython3Imports(unittest.TestCase):
         """Test importing processVehicles module"""
         try:
             import processVehicles  # noqa: F401
+
             self.assertTrue(True)
         except SyntaxError as e:
             self.fail(f"processVehicles.py has Python 2 syntax errors: {e}")
@@ -180,10 +238,11 @@ class TestPython3Imports(unittest.TestCase):
         """Test importing inputOutput module"""
         try:
             import inputOutput  # noqa: F401
+
             self.assertTrue(True)
         except SyntaxError as e:
             self.fail(f"inputOutput.py has Python 2 syntax errors: {e}")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

@@ -343,9 +343,7 @@ export interface paths {
         };
         /**
          * Get Metrics
-         * @description Get Prometheus-compatible metrics.
-         *
-         *     Returns basic metrics about ingestion operations.
+         * @description Get Prometheus-compatible process health metrics.
          */
         get: operations["get_metrics_metrics_get"];
         put?: never;
@@ -1322,7 +1320,9 @@ export interface operations {
     get_config_config_get: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-api-key"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
@@ -1335,6 +1335,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -1388,7 +1397,9 @@ export interface operations {
     get_job_status_jobs__ingest_id__get: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-api-key"?: string | null;
+            };
             path: {
                 ingest_id: string;
             };
@@ -1419,7 +1430,9 @@ export interface operations {
     get_metrics_metrics_get: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-api-key"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
@@ -1431,7 +1444,16 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "text/plain": string;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
