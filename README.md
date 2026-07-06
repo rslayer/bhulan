@@ -13,14 +13,13 @@ An open-source GPS data processing and mobility insights platform.
 
 ## Public demo
 
+Try Bhulan live: **https://bhulan.onrender.com**
+
 Bhulan is designed to launch as a free, stateless open-source demo: pasted coordinates and uploaded files are processed in memory and are not stored when auth/history is disabled. See [PUBLIC_DEMO.md](PUBLIC_DEMO.md) for the recommended privacy-safe launch mode.
 
 The fastest hosted path is Render using the included `render.yaml` and `Dockerfile`. The single container builds the React app, serves it through FastAPI, and exposes `/v1/healthz` for health checks.
 
-When you publish a public instance, add the live URL here and launch it as:
-**anonymous GPS mobility insights; no account required; no saved coordinates**.
-Keep `BHULAN_AUTH_ENABLED=false` for the first release so the UI hides sign-in
-and history controls.
+The public instance runs as **anonymous GPS mobility insights; no account required; no saved coordinates**. `BHULAN_AUTH_ENABLED=false` keeps sign-in and history controls hidden.
 
 ## Quick start
 
