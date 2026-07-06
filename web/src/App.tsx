@@ -25,13 +25,21 @@ const TABS: TabDef[] = [
   { id: "history", label: "History", icon: <History className="h-4 w-4" /> },
 ];
 
-function Tabs({ tab, onChange }: { tab: Tab; onChange: (t: Tab) => void }) {
+function Tabs({
+  tab,
+  tabs,
+  onChange,
+}: {
+  tab: Tab;
+  tabs: TabDef[];
+  onChange: (t: Tab) => void;
+}) {
   return (
     <div
       role="tablist"
       className="inline-flex items-center rounded-lg border border-slate-200 bg-white p-1 text-sm"
     >
-      {TABS.map((t) => (
+      {tabs.map((t) => (
         <button
           key={t.id}
           role="tab"
@@ -61,7 +69,14 @@ function Tabs({ tab, onChange }: { tab: Tab; onChange: (t: Tab) => void }) {
 function AppShell() {
   const [tab, setTab] = useState<Tab>("insights");
   const [privacyOpen, setPrivacyOpen] = useState(false);
-  const { user } = useAuth();
+  const { user, capabilities } = useAuth();
+  const tabs = capabilities.history_enabled
+    ? TABS
+    : TABS.filter((t) => t.id !== "history");
+
+  useEffect(() => {
+    if (tab === "history" && !capabilities.history_enabled) setTab("insights");
+  }, [tab, capabilities.history_enabled]);
 
   // Replay from the History tab lands on the Insights tab. HistoryPage
   // writes the stored request to localStorage and dispatches the event;
@@ -83,7 +98,7 @@ function AppShell() {
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-3">
-            <Tabs tab={tab} onChange={setTab} />
+            <Tabs tab={tab} onChange={setTab} tabs={tabs} />
             <UserMenu />
           </div>
         </div>
@@ -112,9 +127,11 @@ function AppShell() {
       </main>
       <footer className="mx-auto max-w-6xl px-4 py-8 text-xs text-slate-500">
         <span>
-          {user
-            ? "Signed in — your insights runs are saved to your history."
-            : "Anonymous runs aren\u2019t stored. Sign in to save your history."}
+          {capabilities.history_enabled
+            ? user
+              ? "Signed in — your insights runs are saved to your history."
+              : "Anonymous runs aren\u2019t stored. Sign in to save your history."
+            : "Public demo mode — runs are processed in memory and aren\u2019t stored."}
         </span>
         <span aria-hidden> · </span>
         <button

@@ -29,6 +29,11 @@ vi.mock("@/lib/api", async (importOriginal) => {
   return {
     ...actual,
     registerAuthHeaderProvider: vi.fn(),
+    getCapabilities: vi.fn().mockResolvedValue({
+      auth_enabled: false,
+      history_enabled: false,
+      public_demo: true,
+    }),
     authMe: vi.fn().mockRejectedValue(new Error("no session")),
   };
 });
@@ -59,11 +64,9 @@ describe("App shell", () => {
     expect(screen.getByTestId("compare-page")).toBeInTheDocument();
   });
 
-  it("switches to History tab on click", async () => {
-    const user = userEvent.setup();
+  it("hides History in public demo mode", () => {
     render(<App />);
-    await user.click(screen.getByRole("tab", { name: "History" }));
-    expect(screen.getByTestId("history-page")).toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: "History" })).not.toBeInTheDocument();
   });
 
   it("shows Privacy link in footer", () => {
@@ -71,10 +74,10 @@ describe("App shell", () => {
     expect(screen.getByText("Privacy")).toBeInTheDocument();
   });
 
-  it("shows anonymous message when not signed in", () => {
+  it("shows public demo storage message when auth is disabled", async () => {
     render(<App />);
     expect(
-      screen.getByText(/Anonymous runs aren.t stored/),
+      await screen.findByText(/Public demo mode.*aren.t stored/),
     ).toBeInTheDocument();
   });
 });

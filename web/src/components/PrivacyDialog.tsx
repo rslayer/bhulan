@@ -1,4 +1,5 @@
 import { ShieldCheck } from "lucide-react";
+import { useAuth } from "@/components/AuthProvider";
 import { Button } from "@/components/ui/button";
 
 interface Props {
@@ -12,6 +13,8 @@ interface Props {
  * external calls — so it stays trustworthy.
  */
 export function PrivacyDialog({ onClose }: Props) {
+  const { capabilities } = useAuth();
+
   return (
     <div
       role="dialog"
@@ -36,16 +39,20 @@ export function PrivacyDialog({ onClose }: Props) {
             {" "}If you compute insights without signing in, your coordinates are
             processed in memory and discarded as soon as the response is sent.
           </li>
-          <li>
-            <span className="font-medium text-slate-900">Signed-in runs are saved to your history</span>
-            {" "}so you can replay or delete them. Only you can see them. Delete
-            any entry from the History tab; it is removed permanently.
-          </li>
-          <li>
-            <span className="font-medium text-slate-900">Sign-in uses one-time email links.</span>
-            {" "}No passwords. We hash the link with HMAC-SHA256 keyed on a server
-            secret so a database leak can&rsquo;t replay your link.
-          </li>
+          {capabilities.history_enabled && (
+            <li>
+              <span className="font-medium text-slate-900">Signed-in runs are saved to your history</span>
+              {" "}so you can replay or delete them. Only you can see them. Delete
+              any entry from the History tab; it is removed permanently.
+            </li>
+          )}
+          {capabilities.auth_enabled && (
+            <li>
+              <span className="font-medium text-slate-900">Sign-in uses one-time email links.</span>
+              {" "}No passwords. We hash the link with HMAC-SHA256 keyed on a server
+              secret so a database leak can&rsquo;t replay your link.
+            </li>
+          )}
           <li>
             <span className="font-medium text-slate-900">Reverse geocoding is opt-in.</span>
             {" "}Stop coordinates are only sent to OpenStreetMap (Nominatim) when

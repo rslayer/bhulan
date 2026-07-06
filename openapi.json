@@ -573,6 +573,32 @@
         }
       }
     },
+    "/v1/capabilities": {
+      "get": {
+        "tags": [
+          "insights"
+        ],
+        "summary": "Capabilities",
+        "description": "Feature flags the frontend can use without probing disabled routes.",
+        "operationId": "capabilities_v1_capabilities_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "boolean"
+                  },
+                  "type": "object",
+                  "title": "Response Capabilities V1 Capabilities Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/health/ready": {
       "get": {
         "summary": "Health Check",

@@ -17,7 +17,9 @@ Recommended public-demo environment variables:
 | --- | --- | --- |
 | `ALLOWED_ORIGINS` | `*` | Good for the single-container demo and public API. |
 | `BHULAN_AUTH_ENABLED` | `false` | Keeps accounts/history off. |
-| `ENABLE_PROMETHEUS` | `true` | Exposes simple process metrics at `/metrics`. |
+| `AUTH_DEV_MODE` | `false` | Keeps magic-link tokens out of HTTP responses. |
+| `ENABLE_PROMETHEUS` | `false` | Keeps `/metrics` unavailable on the public demo. |
+| `API_KEY` | long random value | Protects legacy `/config`, `/metrics`, and `/jobs/*` endpoints if enabled later. |
 | `RATE_LIMIT_INSIGHTS` | `30/minute` | Per-IP slowapi limit. |
 | `RATE_LIMIT_PLOT` | `60/minute` | Per-IP slowapi limit. |
 | `WEB_DIST_DIR` | `/app/web/dist` | Where the Docker image copies the Vite bundle. |
@@ -31,6 +33,7 @@ Use [PUBLIC_DEMO.md](PUBLIC_DEMO.md) as the public operations note. In this mode
 - `/v1/insights`, `/v1/plot/validate`, `/v1/compare`, and `/v1/parse/file` are stateless.
 - Uploaded/pasted GPS data is processed in memory for the request and is not persisted by Bhulan.
 - `/v1/auth/*` and `/v1/history/*` return unavailable unless `BHULAN_AUTH_ENABLED=true`.
+- `/v1/capabilities` tells the frontend whether auth/history should be shown.
 - Mongo-backed `/ingest/trackpoints` and `/jobs/*` are only useful when MongoDB is configured.
 
 Avoid enabling request-body logging at your host or reverse proxy if you run a public demo.
@@ -56,6 +59,8 @@ flyctl deploy
 ```
 
 `fly.toml` runs `uvicorn bhulan.api.app:app --host 0.0.0.0 --port 8080` and can mount `/data` for opt-in SQLite auth/history. Use Fly if you prefer its platform or already have billing set up.
+The included GitHub Actions Fly workflow is manual-only; Render should be
+connected through Render's dashboard/blueprint.
 
 ## Optional: persistence
 

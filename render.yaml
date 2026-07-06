@@ -10,8 +10,12 @@ services:
         value: "*"
       - key: BHULAN_AUTH_ENABLED
         value: "false"
+      - key: AUTH_DEV_MODE
+        value: "false"
       - key: ENABLE_PROMETHEUS
-        value: "true"
+        value: "false"
+      - key: API_KEY
+        sync: false
       - key: RATE_LIMIT_INSIGHTS
         value: 30/minute
       - key: RATE_LIMIT_PLOT

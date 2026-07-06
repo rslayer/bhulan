@@ -5,9 +5,18 @@ import { useAuth } from "@/components/AuthProvider";
 import { authRequestLink } from "@/lib/api";
 
 export function UserMenu() {
-  const { user, loading, verifying, verifyError, dismissVerifyError, logout } =
-    useAuth();
+  const {
+    user,
+    capabilities,
+    loading,
+    verifying,
+    verifyError,
+    dismissVerifyError,
+    logout,
+  } = useAuth();
   const [open, setOpen] = useState(false);
+
+  if (!capabilities.auth_enabled) return null;
 
   if (loading || verifying) {
     return (

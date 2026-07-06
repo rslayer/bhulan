@@ -108,6 +108,16 @@ async def healthz() -> Dict[str, str]:
     return {"status": "ok"}
 
 
+@app.get("/v1/capabilities", tags=["insights"])
+async def capabilities() -> Dict[str, bool]:
+    """Feature flags the frontend can use without probing disabled routes."""
+    return {
+        "auth_enabled": settings.BHULAN_AUTH_ENABLED,
+        "history_enabled": settings.BHULAN_AUTH_ENABLED,
+        "public_demo": not settings.BHULAN_AUTH_ENABLED,
+    }
+
+
 def _maybe_repo() -> Optional["MongoTrackPointRepository"]:
     """
     Build a Mongo repo lazily and ensure production indexes exist.

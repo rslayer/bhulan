@@ -11,7 +11,9 @@ import {
   authMe,
   authLogout,
   authVerifyLink,
+  getCapabilities,
   registerAuthHeaderProvider,
+  type Capabilities,
   type CurrentUser,
 } from "@/lib/api";
 import {
@@ -23,6 +25,7 @@ import {
 
 interface AuthContextValue {
   user: CurrentUser | null;
+  capabilities: Capabilities;
   loading: boolean;
   /** Non-null while the AuthProvider is processing a magic link from the URL. */
   verifying: boolean;
@@ -35,6 +38,12 @@ interface AuthContextValue {
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
+
+const DEFAULT_CAPABILITIES: Capabilities = {
+  auth_enabled: false,
+  history_enabled: false,
+  public_demo: true,
+};
 
 export function useAuth(): AuthContextValue {
   const ctx = useContext(AuthContext);
@@ -49,6 +58,8 @@ interface Props {
 export function AuthProvider({ children }: Props) {
   const tokenRef = useRef<string | null>(getStoredToken());
   const [user, setUser] = useState<CurrentUser | null>(null);
+  const [capabilities, setCapabilities] =
+    useState<Capabilities>(DEFAULT_CAPABILITIES);
   const [loading, setLoading] = useState<boolean>(true);
   const [verifying, setVerifying] = useState<boolean>(false);
   const [verifyError, setVerifyError] = useState<string | null>(null);
@@ -64,12 +75,34 @@ export function AuthProvider({ children }: Props) {
     });
   }, []);
 
-  // On mount: (1) consume a magic-link token if present in the URL hash,
-  // (2) otherwise rehydrate the existing session by calling /v1/auth/me.
+  // On mount: (1) discover server capabilities, (2) consume a magic-link
+  // token if auth is enabled, (3) otherwise rehydrate the existing session
+  // by calling /v1/auth/me.
   useEffect(() => {
     let cancelled = false;
 
     async function boot() {
+      let caps = DEFAULT_CAPABILITIES;
+      try {
+        caps = await getCapabilities();
+      } catch {
+        // Fail closed into anonymous public-demo mode. The core /v1
+        // analytics endpoints do not need auth, and this avoids showing
+        // sign-in controls when capability discovery is unavailable.
+      }
+      if (!cancelled) setCapabilities(caps);
+
+      if (!caps.auth_enabled) {
+        extractAndClearMagicTokenFromHash();
+        tokenRef.current = null;
+        clearStoredToken();
+        if (!cancelled) {
+          setUser(null);
+          setLoading(false);
+        }
+        return;
+      }
+
       const magic = extractAndClearMagicTokenFromHash();
       if (magic) {
         setVerifying(true);
@@ -148,6 +181,7 @@ export function AuthProvider({ children }: Props) {
   const value = useMemo<AuthContextValue>(
     () => ({
       user,
+      capabilities,
       loading,
       verifying,
       verifyError,
@@ -155,7 +189,16 @@ export function AuthProvider({ children }: Props) {
       setSession,
       logout,
     }),
-    [user, loading, verifying, verifyError, dismissVerifyError, setSession, logout],
+    [
+      user,
+      capabilities,
+      loading,
+      verifying,
+      verifyError,
+      dismissVerifyError,
+      setSession,
+      logout,
+    ],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

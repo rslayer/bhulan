@@ -35,7 +35,7 @@ const DEFAULT_OPTIONS: Options = {
 const HEATMAP_AUTO_THRESHOLD = 10000;
 
 export function InsightsPage() {
-  const { user } = useAuth();
+  const { user, capabilities } = useAuth();
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -161,7 +161,9 @@ export function InsightsPage() {
 
             {!user && (
               <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
-                Anonymous runs aren&rsquo;t stored. Sign in to save your history.
+                {capabilities.history_enabled
+                  ? "Anonymous runs aren\u2019t stored. Sign in to save your history."
+                  : "Public demo mode: coordinates are processed in memory and aren\u2019t stored."}
               </div>
             )}
 

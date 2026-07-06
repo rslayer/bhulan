@@ -17,6 +17,11 @@ Bhulan is designed to launch as a free, stateless open-source demo: pasted coord
 
 The fastest hosted path is Render using the included `render.yaml` and `Dockerfile`. The single container builds the React app, serves it through FastAPI, and exposes `/v1/healthz` for health checks.
 
+When you publish a public instance, add the live URL here and launch it as:
+**anonymous GPS mobility insights; no account required; no saved coordinates**.
+Keep `BHULAN_AUTH_ENABLED=false` for the first release so the UI hides sign-in
+and history controls.
+
 ## Quick start
 
 ```bash

@@ -30,7 +30,9 @@ In public demo mode, Bhulan processes GPS input in memory for the duration of th
 | --- | --- |
 | `ALLOWED_ORIGINS` | `*` |
 | `BHULAN_AUTH_ENABLED` | `false` |
-| `ENABLE_PROMETHEUS` | `true` |
+| `AUTH_DEV_MODE` | `false` |
+| `ENABLE_PROMETHEUS` | `false` |
+| `API_KEY` | long random value |
 | `RATE_LIMIT_INSIGHTS` | `30/minute` |
 | `RATE_LIMIT_PLOT` | `60/minute` |
 
@@ -39,6 +41,10 @@ After deploy, check:
 - `/v1/healthz` returns `{"status": "ok"}`.
 - `/docs` loads the API docs.
 - The home page loads the React app.
+
+The UI reads `/v1/capabilities` on startup. With
+`BHULAN_AUTH_ENABLED=false`, sign-in and history controls are hidden so the
+public demo presents itself as an anonymous, no-storage tool.
 
 ## When to add persistence
 

@@ -137,6 +137,34 @@ def test_legacy_read_endpoints_use_api_key_when_configured(monkeypatch):
     assert client.get("/config", headers={"X-API-Key": "secret"}).status_code == 200
 
 
+def test_capabilities_reflect_public_demo_mode(monkeypatch):
+    monkeypatch.setattr(settings, "BHULAN_AUTH_ENABLED", False)
+    client = TestClient(app_module.app)
+
+    response = client.get("/v1/capabilities")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "auth_enabled": False,
+        "history_enabled": False,
+        "public_demo": True,
+    }
+
+
+def test_capabilities_reflect_auth_enabled(monkeypatch):
+    monkeypatch.setattr(settings, "BHULAN_AUTH_ENABLED", True)
+    client = TestClient(app_module.app)
+
+    response = client.get("/v1/capabilities")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "auth_enabled": True,
+        "history_enabled": True,
+        "public_demo": False,
+    }
+
+
 def test_metrics_are_prometheus_text(monkeypatch):
     _install_fakes(monkeypatch)
     client = TestClient(app_module.app)

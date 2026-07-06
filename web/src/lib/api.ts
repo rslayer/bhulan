@@ -225,6 +225,18 @@ export async function parseFile(file: File): Promise<ParseFileResponse> {
   });
 }
 
+// --- Server capabilities ------------------------------------------------
+
+export interface Capabilities {
+  auth_enabled: boolean;
+  history_enabled: boolean;
+  public_demo: boolean;
+}
+
+export function getCapabilities(): Promise<Capabilities> {
+  return getJSON("/v1/capabilities");
+}
+
 // --- Auth + history ---------------------------------------------------
 
 export interface CurrentUser {
