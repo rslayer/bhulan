@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { Activity, MapPin, Route } from "lucide-react";
 import { CoordinateInput } from "@/components/CoordinateInput";
 import { InsightsPanel } from "@/components/InsightsPanel";
 import { MapView } from "@/components/MapView";
@@ -160,7 +161,7 @@ export function InsightsPage() {
             />
 
             {!user && (
-              <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+              <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
                 {capabilities.history_enabled
                   ? "Anonymous runs aren\u2019t stored. Sign in to save your history."
                   : "Public demo mode: coordinates are processed in memory and aren\u2019t stored."}
@@ -292,11 +293,26 @@ export function InsightsPage() {
         {report ? (
           <InsightsPanel report={report} hotspotGridM={options.hotspot_grid_m} />
         ) : (
-          <Card>
-            <CardContent className="py-10 text-center text-sm text-slate-500">
-              Paste GPS coordinates on the left and press{" "}
-              <span className="font-medium">Compute insights</span> to see stops, distance, speeds,
-              and moving vs. idle time.
+          <Card className="border-dashed border-slate-300 bg-white/75">
+            <CardContent className="py-10">
+              <div className="mx-auto flex max-w-md flex-col items-center gap-4 text-center">
+                <div className="grid grid-cols-3 gap-2 text-cyan-900">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-cyan-50">
+                    <MapPin className="h-5 w-5" />
+                  </div>
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-50 text-emerald-900">
+                    <Route className="h-5 w-5" />
+                  </div>
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-50 text-amber-800">
+                    <Activity className="h-5 w-5" />
+                  </div>
+                </div>
+                <div className="text-sm text-slate-600">
+                  Paste GPS coordinates on the left and press{" "}
+                  <span className="font-medium text-slate-900">Compute insights</span> to see stops,
+                  distance, speeds, and moving vs. idle time.
+                </div>
+              </div>
             </CardContent>
           </Card>
         )}

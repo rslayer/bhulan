@@ -148,8 +148,8 @@ export function CoordinateInput({ value, onChange, onSubmit, submitLabel = "Comp
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-1 rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5">
-        <span className="mr-1 text-xs text-slate-500">Download sample files:</span>
+      <div className="flex flex-wrap items-center gap-1 rounded-md border border-cyan-100 bg-cyan-50/70 px-2 py-1.5">
+        <span className="mr-1 text-xs font-medium text-cyan-900">Download sample files:</span>
         {SAMPLE_FILES.map((s) => (
           <Button key={s.fileUrl} asChild type="button" variant="ghost" size="sm">
             <a href={s.fileUrl} download title={s.description}>
@@ -169,7 +169,7 @@ export function CoordinateInput({ value, onChange, onSubmit, submitLabel = "Comp
         onDragLeave={() => setDragging(false)}
         onDrop={onDrop}
         className={`rounded-md border ${
-          dragging ? "border-slate-900 ring-2 ring-slate-900" : "border-transparent"
+          dragging ? "border-cyan-800 ring-2 ring-cyan-800" : "border-transparent"
         }`}
       >
         <Textarea
@@ -183,7 +183,7 @@ export function CoordinateInput({ value, onChange, onSubmit, submitLabel = "Comp
       </div>
 
       {uploadNote && !uploadError && (
-        <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
+        <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
           {uploadNote}
         </div>
       )}

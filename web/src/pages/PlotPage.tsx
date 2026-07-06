@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { MapPinned } from "lucide-react";
 import { CoordinateInput } from "@/components/CoordinateInput";
 import { MapView } from "@/components/MapView";
 import { MapLayerToggle, type MapLayerMode } from "@/components/MapLayerToggle";
@@ -87,7 +88,7 @@ export function PlotPage() {
               </div>
             )}
             {(accepted > 0 || rejected > 0) && (
-              <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm">
+              <div className="rounded-md border border-cyan-100 bg-cyan-50/70 p-3 text-sm text-cyan-950">
                 <div>
                   <span className="font-semibold">{accepted}</span> accepted,{" "}
                   <span className="font-semibold">{rejected}</span> rejected
@@ -134,13 +135,21 @@ export function PlotPage() {
               }
             />
             {points.length >= HEATMAP_AUTO_THRESHOLD && layerMode !== "heatmap" && (
-              <div className="mt-2 text-xs text-slate-500">
+              <div className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
                 {points.length.toLocaleString()} points — switch to heatmap for
                 faster rendering.
               </div>
             )}
           </CardContent>
         </Card>
+        {points.length === 0 && !loading && (
+          <Card className="mt-4 border-dashed border-slate-300 bg-white/75">
+            <CardContent className="py-8 text-center text-sm text-slate-600">
+              <MapPinned className="mx-auto mb-3 h-7 w-7 text-cyan-900" />
+              Plot a track to inspect route shape, sample density, and coordinate quality.
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
   );

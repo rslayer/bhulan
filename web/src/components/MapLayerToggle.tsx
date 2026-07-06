@@ -25,7 +25,7 @@ export function MapLayerToggle({ value, onChange, disabled }: Props) {
     <div
       role="group"
       aria-label="Map layer"
-      className="inline-flex rounded-md border border-slate-200 bg-white p-0.5 text-xs"
+      className="inline-flex rounded-md border border-slate-200 bg-slate-50/90 p-0.5 text-xs"
     >
       {MODES.map(({ mode, label, Icon }) => {
         const active = value === mode;

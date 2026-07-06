@@ -36,8 +36,8 @@ interface StatProps {
 
 function Stat({ label, value, icon, hint }: StatProps) {
   return (
-    <div className="flex items-start gap-3 rounded-lg border border-slate-200 bg-white p-3">
-      <div className="mt-0.5 flex h-8 w-8 items-center justify-center rounded-md bg-slate-100 text-slate-700">
+    <div className="flex items-start gap-3 rounded-lg border border-slate-200/80 bg-white/90 p-3 shadow-sm shadow-slate-200/50">
+      <div className="mt-0.5 flex h-8 w-8 items-center justify-center rounded-md bg-cyan-50 text-cyan-900">
         {icon}
       </div>
       <div className="min-w-0">
@@ -64,7 +64,7 @@ export function InsightsPanel({ report, hotspotGridM }: Props) {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="sticky top-2 z-10 flex flex-wrap items-center gap-1.5 rounded-lg border border-slate-200 bg-white/90 p-2 text-xs shadow-sm backdrop-blur">
+      <div className="sticky top-[76px] z-10 flex flex-wrap items-center gap-1.5 rounded-lg border border-cyan-100 bg-white/90 p-2 text-xs shadow-sm backdrop-blur">
         <span className="px-1 font-medium text-slate-500">
           {formatNumber(s.total_distance_km, 2)} km · {formatMinutes(s.moving_time_min)} moving
         </span>

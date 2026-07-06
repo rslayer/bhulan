@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { GitCompareArrows, Plus, Trash2 } from "lucide-react";
 
 import { HotspotsList } from "@/components/HotspotsList";
 import { MapView, trackColor, type MapTrack } from "@/components/MapView";
@@ -116,7 +116,7 @@ export function ComparePage() {
             {drafts.map((d, i) => (
               <div
                 key={d.id}
-                className="flex flex-col gap-2 rounded-md border border-slate-200 p-3"
+                className="flex flex-col gap-2 rounded-md border border-slate-200 bg-slate-50/70 p-3"
               >
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex flex-1 items-center gap-2">
@@ -148,7 +148,7 @@ export function ComparePage() {
                   </Button>
                 </div>
                 <textarea
-                  className="min-h-[110px] w-full rounded-md border border-slate-200 bg-slate-50 p-2 font-mono text-xs"
+                  className="min-h-[110px] w-full rounded-md border border-slate-200 bg-white/95 p-2 font-mono text-xs shadow-inner shadow-slate-100 focus:outline-none focus:ring-2 focus:ring-cyan-800"
                   placeholder={"12.97,77.59,2025-01-01T09:00:00Z\n12.98,77.60,2025-01-01T09:01:00Z"}
                   value={d.text}
                   onChange={(e) => updateDraft(d.id, { text: e.target.value })}
@@ -261,10 +261,11 @@ export function ComparePage() {
         )}
 
         {!result && !loading && (
-          <Card>
-            <CardContent className="py-10 text-center text-sm text-slate-500">
+          <Card className="border-dashed border-slate-300 bg-white/75">
+            <CardContent className="py-10 text-center text-sm text-slate-600">
+              <GitCompareArrows className="mx-auto mb-3 h-7 w-7 text-cyan-900" />
               Paste 2+ tracks on the left and press{" "}
-              <span className="font-medium">Compare tracks</span> to see a
+              <span className="font-medium text-slate-900">Compare tracks</span> to see a
               side-by-side breakdown with an overlayed map and shared hotspots.
             </CardContent>
           </Card>

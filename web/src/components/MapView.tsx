@@ -113,12 +113,17 @@ export function MapView({
     // Default height shrinks on phones so the map doesn't push the
     // Insights/Plot stats below the fold; the original 520 px kicks in
     // from ``sm`` upward. Callers may pass ``className`` to override.
-    <div className={className ?? "h-[360px] w-full sm:h-[520px]"}>
+    <div
+      className={
+        className ??
+        "h-[360px] w-full overflow-hidden rounded-lg border border-slate-200 bg-slate-100 shadow-inner sm:h-[520px]"
+      }
+    >
       <MapContainer
         center={center}
         zoom={hasPoints ? 14 : 2}
         scrollWheelZoom
-        className="h-full w-full rounded-md"
+        className="h-full w-full"
       >
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { GitCompareArrows, History, Map, Sparkles } from "lucide-react";
+import { GitCompareArrows, History, Map, Route, Sparkles } from "lucide-react";
 import { AuthProvider, useAuth } from "@/components/AuthProvider";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { PrivacyDialog } from "@/components/PrivacyDialog";
@@ -37,7 +37,7 @@ function Tabs({
   return (
     <div
       role="tablist"
-      className="inline-flex items-center rounded-lg border border-slate-200 bg-white p-1 text-sm"
+      className="inline-flex items-center rounded-lg border border-white/10 bg-white/10 p-1 text-sm shadow-inner shadow-black/10 backdrop-blur"
     >
       {tabs.map((t) => (
         <button
@@ -51,8 +51,8 @@ function Tabs({
             // the user menu fit on one line; full padding from sm.
             "inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 sm:px-3",
             tab === t.id
-              ? "bg-slate-900 text-white"
-              : "text-slate-700 hover:bg-slate-100",
+              ? "bg-white text-cyan-950 shadow-sm"
+              : "text-slate-200 hover:bg-white/10 hover:text-white",
           )}
           onClick={() => onChange(t.id)}
         >
@@ -89,12 +89,17 @@ function AppShell() {
 
   return (
     <div className="min-h-full">
-      <header className="border-b border-slate-200 bg-white">
+      <header className="sticky top-0 z-30 border-b border-cyan-900/40 bg-slate-950/95 text-white shadow-lg shadow-slate-900/10 backdrop-blur">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-3">
-          <div>
-            <div className="text-lg font-semibold">Bhulan</div>
-            <div className="text-xs text-slate-500">
-              Find stops, trips, and frequent locations in any GPS track
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-cyan-400/15 text-cyan-200 ring-1 ring-cyan-300/20">
+              <Route className="h-5 w-5" />
+            </div>
+            <div>
+              <div className="text-lg font-semibold">Bhulan</div>
+              <div className="text-xs text-slate-300">
+                Find stops, trips, and frequent locations in any GPS track
+              </div>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-3">
@@ -103,7 +108,7 @@ function AppShell() {
           </div>
         </div>
       </header>
-      <main className="mx-auto max-w-6xl px-4 py-6">
+      <main className="mx-auto max-w-6xl px-4 py-7 sm:py-8">
         {tab === "insights" && (
           <ErrorBoundary label="Insights">
             <InsightsPage />
@@ -125,7 +130,7 @@ function AppShell() {
           </ErrorBoundary>
         )}
       </main>
-      <footer className="mx-auto max-w-6xl px-4 py-8 text-xs text-slate-500">
+      <footer className="mx-auto max-w-6xl px-4 py-8 text-xs text-slate-600">
         <span>
           {capabilities.history_enabled
             ? user
