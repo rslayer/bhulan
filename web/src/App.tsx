@@ -130,22 +130,34 @@ function AppShell() {
           </ErrorBoundary>
         )}
       </main>
-      <footer className="mx-auto max-w-6xl px-4 py-8 text-xs text-slate-600">
-        <span>
-          {capabilities.history_enabled
-            ? user
-              ? "Signed in — your insights runs are saved to your history."
-              : "Anonymous runs aren\u2019t stored. Sign in to save your history."
-            : "Public demo mode — runs are processed in memory and aren\u2019t stored."}
-        </span>
-        <span aria-hidden> · </span>
-        <button
-          type="button"
-          className="underline-offset-2 hover:underline"
-          onClick={() => setPrivacyOpen(true)}
-        >
-          Privacy
-        </button>
+      <footer className="mx-auto flex max-w-6xl flex-col gap-2 px-4 py-8 text-xs text-slate-600 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <span>
+            {capabilities.history_enabled
+              ? user
+                ? "Signed in — your insights runs are saved to your history."
+                : "Anonymous runs aren\u2019t stored. Sign in to save your history."
+              : "Public demo mode — runs are processed in memory and aren\u2019t stored."}
+          </span>
+          <span aria-hidden> · </span>
+          <button
+            type="button"
+            className="underline-offset-2 hover:underline"
+            onClick={() => setPrivacyOpen(true)}
+          >
+            Privacy
+          </button>
+        </div>
+        <div>
+          Created by Ali Kamil. For questions, reach out at{" "}
+          <a
+            className="font-medium text-cyan-900 underline-offset-2 hover:underline"
+            href="mailto:alikamil@gmail.com"
+          >
+            alikamil@gmail.com
+          </a>
+          .
+        </div>
       </footer>
       {privacyOpen && <PrivacyDialog onClose={() => setPrivacyOpen(false)} />}
     </div>
