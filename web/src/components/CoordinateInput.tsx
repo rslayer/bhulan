@@ -2,9 +2,9 @@ import { useState } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { FileUp, Trash2 } from "lucide-react";
+import { Download, FileUp, Trash2 } from "lucide-react";
 import { parseFile, pointsToCsv } from "@/lib/api";
-import { SAMPLES, type Sample } from "@/lib/samples";
+import { SAMPLE_FILES, SAMPLES, type Sample } from "@/lib/samples";
 
 const PLACEHOLDER = `Paste coordinates — any of these formats work:
 
@@ -146,6 +146,19 @@ export function CoordinateInput({ value, onChange, onSubmit, submitLabel = "Comp
             />
           </label>
         </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-1 rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5">
+        <span className="mr-1 text-xs text-slate-500">Download sample files:</span>
+        {SAMPLE_FILES.map((s) => (
+          <Button key={s.fileUrl} asChild type="button" variant="ghost" size="sm">
+            <a href={s.fileUrl} download title={s.description}>
+              <Download className="h-3.5 w-3.5" />
+              <span aria-hidden>{s.emoji}</span>
+              {s.fileLabel}
+            </a>
+          </Button>
+        ))}
       </div>
 
       <div

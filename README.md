@@ -57,6 +57,18 @@ The `/v1/insights` and `/v1/plot/validate` endpoints accept either:
 
 File upload (`/v1/parse/file`) supports GPX, KML, and FIT formats.
 
+## Sample data
+
+The web app ships with synthetic sample tracks for first-time visitors:
+
+- `/samples/city-walk.csv` — short walk with a cafe stop.
+- `/samples/commute-with-stop.json` — drive with a fuel/rest stop.
+- `/samples/delivery-route.geojson` — multi-stop delivery route.
+- `/samples/trail-hike.gpx` — out-and-back trail with a viewpoint rest.
+
+These files are served by the React app and linked from the input panel on
+the public demo.
+
 ## Key concepts
 
 * **Stop** — a stationary period within a configurable radius (default 50 m) lasting at least a configurable duration (default 5 minutes).

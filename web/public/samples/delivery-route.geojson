@@ -1,0 +1,63 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {"name": "Depot departure", "timestamp": "2026-01-03T10:00:00Z"},
+      "geometry": {"type": "Point", "coordinates": [77.594000, 12.971000]}
+    },
+    {
+      "type": "Feature",
+      "properties": {"name": "Stop 1", "timestamp": "2026-01-03T10:05:00Z"},
+      "geometry": {"type": "Point", "coordinates": [77.598200, 12.974100]}
+    },
+    {
+      "type": "Feature",
+      "properties": {"name": "Stop 1 dwell", "timestamp": "2026-01-03T10:13:00Z"},
+      "geometry": {"type": "Point", "coordinates": [77.598230, 12.974120]}
+    },
+    {
+      "type": "Feature",
+      "properties": {"name": "Stop 2", "timestamp": "2026-01-03T10:20:00Z"},
+      "geometry": {"type": "Point", "coordinates": [77.603500, 12.972400]}
+    },
+    {
+      "type": "Feature",
+      "properties": {"name": "Stop 2 dwell", "timestamp": "2026-01-03T10:29:00Z"},
+      "geometry": {"type": "Point", "coordinates": [77.603480, 12.972420]}
+    },
+    {
+      "type": "Feature",
+      "properties": {"name": "Stop 3", "timestamp": "2026-01-03T10:36:00Z"},
+      "geometry": {"type": "Point", "coordinates": [77.601000, 12.967900]}
+    },
+    {
+      "type": "Feature",
+      "properties": {"name": "Stop 3 dwell", "timestamp": "2026-01-03T10:44:00Z"},
+      "geometry": {"type": "Point", "coordinates": [77.600980, 12.967880]}
+    },
+    {
+      "type": "Feature",
+      "properties": {"name": "Depot return", "timestamp": "2026-01-03T10:55:00Z"},
+      "geometry": {"type": "Point", "coordinates": [77.594000, 12.971000]}
+    },
+    {
+      "type": "Feature",
+      "properties": {"name": "Route shape"},
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [77.594000, 12.971000],
+          [77.596200, 12.972600],
+          [77.598200, 12.974100],
+          [77.600900, 12.973400],
+          [77.603500, 12.972400],
+          [77.602200, 12.970000],
+          [77.601000, 12.967900],
+          [77.597200, 12.969200],
+          [77.594000, 12.971000]
+        ]
+      }
+    }
+  ]
+}

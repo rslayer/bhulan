@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="Bhulan synthetic samples" xmlns="http://www.topografix.com/GPX/1/1">
+  <metadata>
+    <name>Out-and-back trail with viewpoint rest</name>
+  </metadata>
+  <trk>
+    <name>Trail Hike</name>
+    <trkseg>
+      <trkpt lat="13.000000" lon="77.600000"><time>2026-01-04T07:00:00Z</time></trkpt>
+      <trkpt lat="13.000300" lon="77.600300"><time>2026-01-04T07:00:30Z</time></trkpt>
+      <trkpt lat="13.000600" lon="77.600600"><time>2026-01-04T07:01:00Z</time></trkpt>
+      <trkpt lat="13.000900" lon="77.600900"><time>2026-01-04T07:01:30Z</time></trkpt>
+      <trkpt lat="13.001200" lon="77.601200"><time>2026-01-04T07:02:00Z</time></trkpt>
+      <trkpt lat="13.001500" lon="77.601500"><time>2026-01-04T07:02:30Z</time></trkpt>
+      <trkpt lat="13.001800" lon="77.601800"><time>2026-01-04T07:03:00Z</time></trkpt>
+      <trkpt lat="13.002100" lon="77.602100"><time>2026-01-04T07:03:30Z</time></trkpt>
+      <trkpt lat="13.002400" lon="77.602400"><time>2026-01-04T07:04:00Z</time></trkpt>
+      <trkpt lat="13.002600" lon="77.602600"><time>2026-01-04T07:04:30Z</time></trkpt>
+      <trkpt lat="13.002600" lon="77.602600"><time>2026-01-04T07:08:00Z</time></trkpt>
+      <trkpt lat="13.002600" lon="77.602600"><time>2026-01-04T07:11:00Z</time></trkpt>
+      <trkpt lat="13.002300" lon="77.602300"><time>2026-01-04T07:11:30Z</time></trkpt>
+      <trkpt lat="13.002000" lon="77.602000"><time>2026-01-04T07:12:00Z</time></trkpt>
+      <trkpt lat="13.001700" lon="77.601700"><time>2026-01-04T07:12:30Z</time></trkpt>
+      <trkpt lat="13.001400" lon="77.601400"><time>2026-01-04T07:13:00Z</time></trkpt>
+      <trkpt lat="13.001100" lon="77.601100"><time>2026-01-04T07:13:30Z</time></trkpt>
+      <trkpt lat="13.000800" lon="77.600800"><time>2026-01-04T07:14:00Z</time></trkpt>
+      <trkpt lat="13.000500" lon="77.600500"><time>2026-01-04T07:14:30Z</time></trkpt>
+      <trkpt lat="13.000200" lon="77.600200"><time>2026-01-04T07:15:00Z</time></trkpt>
+    </trkseg>
+  </trk>
+</gpx>

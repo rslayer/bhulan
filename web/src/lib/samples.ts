@@ -13,6 +13,8 @@ export interface Sample {
   label: string;
   emoji: string;
   description: string;
+  fileLabel: string;
+  fileUrl: string;
   text: string;
 }
 
@@ -88,6 +90,8 @@ export const SAMPLES: Sample[] = [
     label: "Walk",
     emoji: "🚶",
     description: "Short loop with a coffee-shop pause",
+    fileLabel: "CSV",
+    fileUrl: "/samples/city-walk.csv",
     text: WALK,
   },
   {
@@ -95,6 +99,8 @@ export const SAMPLES: Sample[] = [
     label: "Drive",
     emoji: "🚗",
     description: "Highway drive with a fuel stop",
+    fileLabel: "JSON",
+    fileUrl: "/samples/commute-with-stop.json",
     text: DRIVE,
   },
   {
@@ -102,6 +108,20 @@ export const SAMPLES: Sample[] = [
     label: "Hike",
     emoji: "🥾",
     description: "Out-and-back trail with a viewpoint rest",
+    fileLabel: "GPX",
+    fileUrl: "/samples/trail-hike.gpx",
     text: HIKE,
   },
 ];
+
+export const SAMPLE_FILES = [
+  ...SAMPLES,
+  {
+    id: "delivery-route",
+    label: "Delivery route",
+    emoji: "📦",
+    description: "Multi-stop delivery route with dwell points",
+    fileLabel: "GeoJSON",
+    fileUrl: "/samples/delivery-route.geojson",
+  },
+] as const;
