@@ -230,6 +230,7 @@ export async function parseFile(file: File): Promise<ParseFileResponse> {
 export interface Capabilities {
   auth_enabled: boolean;
   history_enabled: boolean;
+  reverse_geocoding_enabled?: boolean;
   public_demo: boolean;
 }
 

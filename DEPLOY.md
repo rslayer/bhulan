@@ -20,8 +20,13 @@ Recommended public-demo environment variables:
 | `AUTH_DEV_MODE` | `false` | Keeps magic-link tokens out of HTTP responses. |
 | `ENABLE_PROMETHEUS` | `false` | Keeps `/metrics` unavailable on the public demo. |
 | `API_KEY` | long random value | Protects legacy `/config`, `/metrics`, and `/jobs/*` endpoints if enabled later. |
-| `RATE_LIMIT_INSIGHTS` | `30/minute` | Per-IP slowapi limit. |
-| `RATE_LIMIT_PLOT` | `60/minute` | Per-IP slowapi limit. |
+| `RATE_LIMIT_INSIGHTS` | `10/minute` | Per-IP slowapi limit for reports and compare. |
+| `RATE_LIMIT_PLOT` | `30/minute` | Per-IP slowapi limit for plotting and file parsing. |
+| `MAX_PUBLIC_TEXT_BYTES` | `1000000` | Rejects very large pasted text before parsing. |
+| `MAX_PUBLIC_POINTS` | `25000` | Per-track public cap before analytics work. |
+| `MAX_COMPARE_TOTAL_POINTS` | `50000` | Aggregate cap across all tracks in compare. |
+| `MAX_UPLOAD_BYTES` | `5242880` | Public-demo upload cap, 5 MiB. |
+| `ENABLE_REVERSE_GEOCODING` | `false` | Keeps outbound per-stop geocoding disabled. |
 | `WEB_DIST_DIR` | `/app/web/dist` | Where the Docker image copies the Vite bundle. |
 
 Health checks should use `/v1/healthz`, not `/health/ready`. The latter checks MongoDB and is only relevant for the legacy ingestion subsystem.
@@ -34,6 +39,7 @@ Use [PUBLIC_DEMO.md](PUBLIC_DEMO.md) as the public operations note. In this mode
 - Uploaded/pasted GPS data is processed in memory for the request and is not persisted by Bhulan.
 - `/v1/auth/*` and `/v1/history/*` return unavailable unless `BHULAN_AUTH_ENABLED=true`.
 - `/v1/capabilities` tells the frontend whether auth/history should be shown.
+- Reverse geocoding is deployment-gated and disabled by default to avoid outbound-call abuse.
 - Mongo-backed `/ingest/trackpoints` and `/jobs/*` are only useful when MongoDB is configured.
 
 Avoid enabling request-body logging at your host or reverse proxy if you run a public demo.

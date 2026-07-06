@@ -147,6 +147,7 @@ def test_capabilities_reflect_public_demo_mode(monkeypatch):
     assert response.json() == {
         "auth_enabled": False,
         "history_enabled": False,
+        "reverse_geocoding_enabled": False,
         "public_demo": True,
     }
 
@@ -161,6 +162,7 @@ def test_capabilities_reflect_auth_enabled(monkeypatch):
     assert response.json() == {
         "auth_enabled": True,
         "history_enabled": True,
+        "reverse_geocoding_enabled": False,
         "public_demo": False,
     }
 

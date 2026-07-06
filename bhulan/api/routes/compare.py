@@ -31,6 +31,7 @@ from bhulan.analytics.insights import (
 )
 from bhulan.analytics.mobility import TrackSample, prepare_track
 from bhulan.analytics.parsers import ParseError, parse_any
+from bhulan.api.routes.insights import _enforce_text_cap, _require_geocoding_enabled
 from bhulan.config.settings import settings
 
 router = APIRouter(prefix="/v1", tags=["compare"])
@@ -105,7 +106,16 @@ def _track_to_points(track: CompareTrack, index: int) -> Tuple[List[PointIn], st
     """
     label = (track.label or "").strip() or f"Track {index + 1}"
     if track.points:
-        return list(track.points), label
+        points = list(track.points)
+        if len(points) > settings.MAX_PUBLIC_POINTS:
+            raise HTTPException(
+                status_code=413,
+                detail=(
+                    f"Track '{label}' has too many points: {len(points)} > "
+                    f"{settings.MAX_PUBLIC_POINTS}"
+                ),
+            )
+        return points, label
     if not track.text or not track.text.strip():
         raise HTTPException(
             status_code=400,
@@ -113,6 +123,7 @@ def _track_to_points(track: CompareTrack, index: int) -> Tuple[List[PointIn], st
                 f"Track '{label}' must include either 'points' or non-empty 'text'"
             ),
         )
+    _enforce_text_cap(track.text)
     try:
         parsed = parse_any(track.text)
     except ParseError as e:
@@ -123,6 +134,14 @@ def _track_to_points(track: CompareTrack, index: int) -> Tuple[List[PointIn], st
         raise HTTPException(
             status_code=400,
             detail=f"Track '{label}': no coordinates parsed from text",
+        )
+    if len(parsed) > settings.MAX_PUBLIC_POINTS:
+        raise HTTPException(
+            status_code=413,
+            detail=(
+                f"Track '{label}' has too many points: {len(parsed)} > "
+                f"{settings.MAX_PUBLIC_POINTS}"
+            ),
         )
     return parsed, label
 
@@ -142,9 +161,20 @@ async def compare_endpoint(
     """
     per_track: List[CompareTrackResult] = []
     pooled_samples: List[TrackSample] = []
+    total_points = 0
+    _require_geocoding_enabled(payload.options)
 
     for idx, track in enumerate(payload.tracks):
         points, label = _track_to_points(track, idx)
+        total_points += len(points)
+        if total_points > settings.MAX_COMPARE_TOTAL_POINTS:
+            raise HTTPException(
+                status_code=413,
+                detail=(
+                    f"Compare request has too many total points: {total_points} > "
+                    f"{settings.MAX_COMPARE_TOTAL_POINTS}"
+                ),
+            )
         # ``InsightsRequest`` runs a per-track point cap validator. We
         # build the model manually here (not via FastAPI body binding),
         # so a cap violation would surface as an unhandled

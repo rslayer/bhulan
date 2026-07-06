@@ -35,11 +35,6 @@ router = APIRouter(prefix="/v1", tags=["insights"])
 # limiter so slowapi's app.state handler recognizes decorated routes.
 limiter = Limiter(key_func=get_remote_address)
 
-# Cap uploaded file size so a single request can't blow the process heap.
-# 25 MB is comfortably above the largest GPX exports phones produce (~8 MB
-# for a multi-hour Strava ride) and still well under default LB body limits.
-MAX_UPLOAD_BYTES = 25 * 1024 * 1024
-
 
 class PlotRequest(BaseModel):
     """Request for :func:`plot_validate` — either structured points or raw text."""
@@ -76,20 +71,57 @@ class RawInsightsRequest(BaseModel):
     )
 
 
+def _enforce_text_cap(text: Optional[str]) -> None:
+    if text is None:
+        return
+    size = len(text.encode("utf-8"))
+    if size > settings.MAX_PUBLIC_TEXT_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=(
+                f"Text payload too large: {size} bytes; "
+                f"limit is {settings.MAX_PUBLIC_TEXT_BYTES}."
+            ),
+        )
+
+
+def _enforce_point_cap(points: List[PointIn], label: str = "Request") -> None:
+    if len(points) > settings.MAX_PUBLIC_POINTS:
+        raise HTTPException(
+            status_code=413,
+            detail=(
+                f"{label} has too many points: {len(points)} > "
+                f"{settings.MAX_PUBLIC_POINTS}."
+            ),
+        )
+
+
+def _require_geocoding_enabled(options: InsightsOptions) -> None:
+    if options.geocode_stops and not settings.ENABLE_REVERSE_GEOCODING:
+        raise HTTPException(
+            status_code=403,
+            detail="Reverse geocoding is disabled on this public instance",
+        )
+
+
 def _materialize_points(
     structured: Optional[List[PointIn]], text: Optional[str]
 ) -> Tuple[List[PointIn], List[str]]:
     issues: List[str] = []
     if structured:
-        return list(structured), issues
+        points = list(structured)
+        _enforce_point_cap(points)
+        return points, issues
     if text is None or not text.strip():
         raise HTTPException(
             status_code=400, detail="Request must include either 'points' or non-empty 'text'"
         )
+    _enforce_text_cap(text)
     try:
         parsed = parse_any(text)
     except ParseError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
+    _enforce_point_cap(parsed)
     if not parsed:
         issues.append("No coordinates could be parsed from the provided text")
     return parsed, issues
@@ -130,6 +162,7 @@ async def insights_endpoint(
     and server-side auth is enabled, the run is also persisted to the
     user's history — look it up with ``GET /v1/history``.
     """
+    _require_geocoding_enabled(payload.options)
     points, parse_issues = _materialize_points(payload.points, payload.text)
     req = InsightsRequest(points=points, options=payload.options)
     report = await compute_insights_with_geocoding(req)
@@ -188,11 +221,11 @@ async def parse_file_endpoint(
     enough that pushing it to a threadpool isn't worth it at this scale).
     """
     data = await file.read()
-    if len(data) > MAX_UPLOAD_BYTES:
+    if len(data) > settings.MAX_UPLOAD_BYTES:
         raise HTTPException(
             status_code=413,
             detail=(
-                f"File too large: {len(data)} bytes; limit is {MAX_UPLOAD_BYTES}."
+                f"File too large: {len(data)} bytes; limit is {settings.MAX_UPLOAD_BYTES}."
             ),
         )
     if not data:
@@ -202,6 +235,7 @@ async def parse_file_endpoint(
         points = parse_file_bytes(file.filename or "", data)
     except ParseError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
+    _enforce_point_cap(points, label=file.filename or "Uploaded file")
 
     issues: List[str] = []
     if not points:

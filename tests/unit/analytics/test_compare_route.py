@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 from fastapi.testclient import TestClient
 
 from bhulan.api.app import app
+from bhulan.config.settings import settings
 
 client = TestClient(app)
 
@@ -110,3 +111,21 @@ def test_compare_autolabels_missing_labels():
     body = resp.json()
     assert body["tracks"][0]["label"] == "Track 1"
     assert body["tracks"][1]["label"] == "Track 2"
+
+
+def test_compare_rejects_total_public_point_cap(monkeypatch):
+    monkeypatch.setattr(settings, "MAX_PUBLIC_POINTS", 10)
+    monkeypatch.setattr(settings, "MAX_COMPARE_TOTAL_POINTS", 3)
+
+    resp = client.post(
+        "/v1/compare",
+        json={
+            "tracks": [
+                {"label": "A", "points": _track_points(2, 12.97, 77.59)},
+                {"label": "B", "points": _track_points(2, 12.98, 77.60)},
+            ]
+        },
+    )
+
+    assert resp.status_code == 413
+    assert "too many total points" in resp.text

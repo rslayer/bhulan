@@ -7,6 +7,8 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from fastapi.testclient import TestClient
 
+from bhulan.config.settings import settings
+
 pytest.importorskip("fastapi")
 
 
@@ -98,3 +100,47 @@ def test_plot_validate_echoes_clean_points(client: TestClient):
 def test_plot_validate_rejects_empty_request(client: TestClient):
     r = client.post("/v1/plot/validate", json={})
     assert r.status_code == 400
+
+
+def test_insights_rejects_oversized_text(client: TestClient, monkeypatch):
+    monkeypatch.setattr(settings, "MAX_PUBLIC_TEXT_BYTES", 10)
+
+    r = client.post(
+        "/v1/insights",
+        json={"text": "lat,lon\n12.97,77.59\n"},
+    )
+
+    assert r.status_code == 413
+    assert "too large" in r.text
+
+
+def test_plot_validate_rejects_too_many_points(client: TestClient, monkeypatch):
+    monkeypatch.setattr(settings, "MAX_PUBLIC_POINTS", 1)
+
+    r = client.post(
+        "/v1/plot/validate",
+        json={
+            "points": [
+                {"lat": 12.97, "lon": 77.59},
+                {"lat": 12.98, "lon": 77.60},
+            ]
+        },
+    )
+
+    assert r.status_code == 413
+    assert "too many points" in r.text
+
+
+def test_insights_rejects_geocoding_when_disabled(client: TestClient, monkeypatch):
+    monkeypatch.setattr(settings, "ENABLE_REVERSE_GEOCODING", False)
+
+    r = client.post(
+        "/v1/insights",
+        json={
+            "points": [{"lat": 12.97, "lon": 77.59}],
+            "options": {"geocode_stops": True},
+        },
+    )
+
+    assert r.status_code == 403
+    assert "Reverse geocoding is disabled" in r.text

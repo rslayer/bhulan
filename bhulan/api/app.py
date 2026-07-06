@@ -114,6 +114,7 @@ async def capabilities() -> Dict[str, bool]:
     return {
         "auth_enabled": settings.BHULAN_AUTH_ENABLED,
         "history_enabled": settings.BHULAN_AUTH_ENABLED,
+        "reverse_geocoding_enabled": settings.ENABLE_REVERSE_GEOCODING,
         "public_demo": not settings.BHULAN_AUTH_ENABLED,
     }
 

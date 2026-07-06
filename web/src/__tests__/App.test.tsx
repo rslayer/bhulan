@@ -32,6 +32,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
     getCapabilities: vi.fn().mockResolvedValue({
       auth_enabled: false,
       history_enabled: false,
+      reverse_geocoding_enabled: false,
       public_demo: true,
     }),
     authMe: vi.fn().mockRejectedValue(new Error("no session")),

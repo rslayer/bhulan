@@ -218,25 +218,27 @@ export function InsightsPage() {
                     />
                   </div>
                 </div>
-                <label className="flex cursor-pointer items-start gap-2 rounded-md border border-slate-200 bg-slate-50 p-3 text-sm">
-                  <input
-                    type="checkbox"
-                    className="mt-0.5 h-4 w-4"
-                    checked={options.geocode_stops}
-                    onChange={(e) =>
-                      setOptions((o) => ({ ...o, geocode_stops: e.target.checked }))
-                    }
-                  />
-                  <div>
-                    <div className="font-medium text-slate-900">
-                      Resolve place names for stops
+                {capabilities.reverse_geocoding_enabled && (
+                  <label className="flex cursor-pointer items-start gap-2 rounded-md border border-slate-200 bg-slate-50 p-3 text-sm">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5 h-4 w-4"
+                      checked={options.geocode_stops}
+                      onChange={(e) =>
+                        setOptions((o) => ({ ...o, geocode_stops: e.target.checked }))
+                      }
+                    />
+                    <div>
+                      <div className="font-medium text-slate-900">
+                        Resolve place names for stops
+                      </div>
+                      <div className="text-xs text-slate-500">
+                        Reverse-geocodes each stop via OpenStreetMap (Nominatim). Adds
+                        up to 1s per unique stop and requires network access.
+                      </div>
                     </div>
-                    <div className="text-xs text-slate-500">
-                      Reverse-geocodes each stop via OpenStreetMap (Nominatim). Adds
-                      up to 1s per unique stop and requires network access.
-                    </div>
-                  </div>
-                </label>
+                  </label>
+                )}
               </div>
             )}
 

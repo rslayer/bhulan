@@ -14,6 +14,7 @@ Bhulan can run as a free, public, stateless GPS analytics tool. This is the reco
 - User accounts and saved history: `BHULAN_AUTH_ENABLED=false`.
 - Mongo-backed ingestion endpoints unless you configure MongoDB and `API_KEY`.
 - Persistent storage of uploaded or pasted GPS data.
+- Reverse geocoding: `ENABLE_REVERSE_GEOCODING=false`.
 
 ## Privacy posture
 
@@ -33,8 +34,13 @@ In public demo mode, Bhulan processes GPS input in memory for the duration of th
 | `AUTH_DEV_MODE` | `false` |
 | `ENABLE_PROMETHEUS` | `false` |
 | `API_KEY` | long random value |
-| `RATE_LIMIT_INSIGHTS` | `30/minute` |
-| `RATE_LIMIT_PLOT` | `60/minute` |
+| `RATE_LIMIT_INSIGHTS` | `10/minute` |
+| `RATE_LIMIT_PLOT` | `30/minute` |
+| `MAX_PUBLIC_TEXT_BYTES` | `1000000` |
+| `MAX_PUBLIC_POINTS` | `25000` |
+| `MAX_COMPARE_TOTAL_POINTS` | `50000` |
+| `MAX_UPLOAD_BYTES` | `5242880` |
+| `ENABLE_REVERSE_GEOCODING` | `false` |
 
 After deploy, check:
 

@@ -17,8 +17,18 @@ services:
       - key: API_KEY
         sync: false
       - key: RATE_LIMIT_INSIGHTS
-        value: 30/minute
+        value: 10/minute
       - key: RATE_LIMIT_PLOT
-        value: 60/minute
+        value: 30/minute
+      - key: MAX_PUBLIC_TEXT_BYTES
+        value: "1000000"
+      - key: MAX_PUBLIC_POINTS
+        value: "25000"
+      - key: MAX_COMPARE_TOTAL_POINTS
+        value: "50000"
+      - key: MAX_UPLOAD_BYTES
+        value: "5242880"
+      - key: ENABLE_REVERSE_GEOCODING
+        value: "false"
       - key: WEB_DIST_DIR
         value: /app/web/dist

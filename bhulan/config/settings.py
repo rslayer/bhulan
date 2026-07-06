@@ -45,6 +45,15 @@ class Settings(BaseSettings):
     RATE_LIMIT_INSIGHTS: str = "30/minute"
     RATE_LIMIT_PLOT: str = "60/minute"
     RATE_LIMIT_AUTH: str = "10/minute"
+    # Public-demo abuse guards. These bound request memory/CPU before the
+    # analytics pipeline allocates large intermediate structures.
+    MAX_PUBLIC_TEXT_BYTES: int = 1_000_000
+    MAX_PUBLIC_POINTS: int = 100_000
+    MAX_COMPARE_TOTAL_POINTS: int = 100_000
+    MAX_UPLOAD_BYTES: int = 25 * 1024 * 1024
+    # Reverse geocoding calls Nominatim over the network and can hold a worker
+    # for 1s per unique stop. Keep it opt-in at the deployment level.
+    ENABLE_REVERSE_GEOCODING: bool = False
     # Where the built SPA lives, relative to the container workdir. If the
     # directory is missing, the API still works — only the mounted UI is skipped.
     WEB_DIST_DIR: str = "web/dist"

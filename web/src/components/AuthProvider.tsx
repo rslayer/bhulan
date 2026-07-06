@@ -42,6 +42,7 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 const DEFAULT_CAPABILITIES: Capabilities = {
   auth_enabled: false,
   history_enabled: false,
+  reverse_geocoding_enabled: false,
   public_demo: true,
 };
 
