@@ -1,11 +1,14 @@
 import { Fragment, useEffect } from "react";
 import {
+  Circle,
   CircleMarker,
+  Marker,
   MapContainer,
   Polyline,
   Popup,
   TileLayer,
   useMap,
+  useMapEvents,
 } from "react-leaflet";
 import L from "leaflet";
 import iconUrl from "leaflet/dist/images/marker-icon.png";
@@ -65,6 +68,12 @@ interface Props {
   // Pixel radius for the heatmap blobs; ignored unless ``heatmap`` is in
   // ``layers``.
   heatRadius?: number;
+  radiusOverlay?: {
+    center: [number, number];
+    radiusM: number;
+    label?: string;
+  } | null;
+  onPickCenter?: (lat: number, lon: number) => void;
 }
 
 function allPoints(tracks: MapTrack[]): Point[] {
@@ -84,6 +93,22 @@ function FitBounds({ points }: { points: Point[] }) {
   return null;
 }
 
+function RadiusCenterPicker({
+  enabled,
+  onPick,
+}: {
+  enabled: boolean;
+  onPick?: (lat: number, lon: number) => void;
+}) {
+  useMapEvents({
+    click(e) {
+      if (!enabled || !onPick) return;
+      onPick(e.latlng.lat, e.latlng.lng);
+    },
+  });
+  return null;
+}
+
 export function MapView({
   points,
   stops = [],
@@ -92,6 +117,8 @@ export function MapView({
   className,
   layers = ["lines", "markers"],
   heatRadius = 18,
+  radiusOverlay,
+  onPickCenter,
 }: Props) {
   const showLines = layers.includes("lines");
   const showMarkers = layers.includes("markers");
@@ -110,9 +137,8 @@ export function MapView({
     : [20, 0];
 
   return (
-    // Default height shrinks on phones so the map doesn't push the
-    // Insights/Plot stats below the fold; the original 520 px kicks in
-    // from ``sm`` upward. Callers may pass ``className`` to override.
+    // Default height shrinks on phones so the map doesn't push stats below
+    // the fold; the original 520 px kicks in from ``sm`` upward.
     <div
       className={
         className ??
@@ -128,6 +154,10 @@ export function MapView({
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        />
+        <RadiusCenterPicker
+          enabled={Boolean(radiusOverlay && onPickCenter)}
+          onPick={onPickCenter}
         />
         {normalizedTracks.map((t, tIdx) => {
           const line: [number, number][] = t.points.map((p) => [p.lat, p.lon]);
@@ -217,6 +247,30 @@ export function MapView({
         ))}
         {showHeatmap && pooled.length > 0 && (
           <HeatLayer points={pooled} radius={heatRadius} />
+        )}
+        {radiusOverlay && radiusOverlay.radiusM > 0 && (
+          <>
+            <Circle
+              center={radiusOverlay.center}
+              radius={radiusOverlay.radiusM}
+              pathOptions={{
+                color: "#0891b2",
+                fillColor: "#06b6d4",
+                fillOpacity: 0.12,
+                weight: 2,
+              }}
+            />
+            <Marker position={radiusOverlay.center}>
+              <Popup>
+                <div className="text-xs">
+                  <div className="font-semibold">
+                    {radiusOverlay.label ?? "Radius center"}
+                  </div>
+                  <div>{Math.round(radiusOverlay.radiusM).toLocaleString()} m radius</div>
+                </div>
+              </Popup>
+            </Marker>
+          </>
         )}
         <FitBounds points={pooled} />
       </MapContainer>

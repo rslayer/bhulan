@@ -17,7 +17,7 @@ const MODES: Array<{ mode: MapLayerMode; label: string; Icon: typeof Circle }> =
 
 /**
  * Small segmented-button group for picking the map rendering mode. Used
- * on the Plot and Insights tabs so users can flip to a heatmap when
+ * on map-heavy workflows so users can flip to a heatmap when
  * there are more markers than a browser can usefully paint.
  */
 export function MapLayerToggle({ value, onChange, disabled }: Props) {

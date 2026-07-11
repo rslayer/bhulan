@@ -146,8 +146,7 @@ export function HistoryPage() {
           {loading && entries.length === 0 && <LoadingSkeleton lines={5} />}
           {entries.length === 0 && !loading && (
             <div className="text-sm text-slate-500">
-              No runs yet. Compute insights on the Insights tab and they&rsquo;ll
-              show up here automatically.
+              No runs yet. Analyze a track and it&rsquo;ll show up here automatically.
             </div>
           )}
           <ul className="divide-y divide-slate-100">

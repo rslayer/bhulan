@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { GitCompareArrows, History, Map, Route, Sparkles } from "lucide-react";
+import { GitCompareArrows, History, Route, Sparkles } from "lucide-react";
 import { AuthProvider, useAuth } from "@/components/AuthProvider";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { PrivacyDialog } from "@/components/PrivacyDialog";
@@ -7,7 +7,6 @@ import { UserMenu } from "@/components/UserMenu";
 import { ComparePage } from "@/pages/ComparePage";
 import { HistoryPage } from "@/pages/HistoryPage";
 import { InsightsPage } from "@/pages/InsightsPage";
-import { PlotPage } from "@/pages/PlotPage";
 import { cn } from "@/lib/utils";
 
 type Tab = "insights" | "plot" | "compare" | "history";
@@ -19,8 +18,7 @@ interface TabDef {
 }
 
 const TABS: TabDef[] = [
-  { id: "insights", label: "Insights", icon: <Sparkles className="h-4 w-4" /> },
-  { id: "plot", label: "Plot", icon: <Map className="h-4 w-4" /> },
+  { id: "insights", label: "Analyze", icon: <Sparkles className="h-4 w-4" /> },
   { id: "compare", label: "Compare", icon: <GitCompareArrows className="h-4 w-4" /> },
   { id: "history", label: "History", icon: <History className="h-4 w-4" /> },
 ];
@@ -78,7 +76,7 @@ function AppShell() {
     if (tab === "history" && !capabilities.history_enabled) setTab("insights");
   }, [tab, capabilities.history_enabled]);
 
-  // Replay from the History tab lands on the Insights tab. HistoryPage
+  // Replay from the History tab lands on the Analyze tab. HistoryPage
   // writes the stored request to localStorage and dispatches the event;
   // InsightsPage listens for the same event to rehydrate its state.
   useEffect(() => {
@@ -110,13 +108,8 @@ function AppShell() {
       </header>
       <main className="mx-auto max-w-6xl px-4 py-7 sm:py-8">
         {tab === "insights" && (
-          <ErrorBoundary label="Insights">
+          <ErrorBoundary label="Analyze">
             <InsightsPage />
-          </ErrorBoundary>
-        )}
-        {tab === "plot" && (
-          <ErrorBoundary label="Plot">
-            <PlotPage />
           </ErrorBoundary>
         )}
         {tab === "compare" && (

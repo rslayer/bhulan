@@ -7,9 +7,6 @@ import App from "@/App";
 vi.mock("@/pages/InsightsPage", () => ({
   InsightsPage: () => <div data-testid="insights-page">InsightsPage</div>,
 }));
-vi.mock("@/pages/PlotPage", () => ({
-  PlotPage: () => <div data-testid="plot-page">PlotPage</div>,
-}));
 vi.mock("@/pages/ComparePage", () => ({
   ComparePage: () => <div data-testid="compare-page">ComparePage</div>,
 }));
@@ -45,17 +42,15 @@ describe("App shell", () => {
     expect(screen.getByText("Bhulan")).toBeInTheDocument();
   });
 
-  it("shows the Insights tab by default", () => {
+  it("shows the Analyze tab by default", () => {
     render(<App />);
+    expect(screen.getByRole("tab", { name: "Analyze" })).toBeInTheDocument();
     expect(screen.getByTestId("insights-page")).toBeInTheDocument();
   });
 
-  it("switches to Plot tab on click", async () => {
-    const user = userEvent.setup();
+  it("does not show a separate Plot tab", () => {
     render(<App />);
-    await user.click(screen.getByRole("tab", { name: "Plot" }));
-    expect(screen.getByTestId("plot-page")).toBeInTheDocument();
-    expect(screen.queryByTestId("insights-page")).not.toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: "Plot" })).not.toBeInTheDocument();
   });
 
   it("switches to Compare tab on click", async () => {
