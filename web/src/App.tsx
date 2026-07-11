@@ -7,6 +7,7 @@ import { UserMenu } from "@/components/UserMenu";
 import { ComparePage } from "@/pages/ComparePage";
 import { HistoryPage } from "@/pages/HistoryPage";
 import { InsightsPage } from "@/pages/InsightsPage";
+import { APP_META } from "@/lib/appMeta";
 import { cn } from "@/lib/utils";
 
 type Tab = "insights" | "plot" | "compare" | "history";
@@ -141,15 +142,20 @@ function AppShell() {
             Privacy
           </button>
         </div>
-        <div>
-          Created by Ali Kamil. For questions, reach out at{" "}
-          <a
-            className="font-medium text-cyan-900 underline-offset-2 hover:underline"
-            href="mailto:alikamil@gmail.com"
-          >
-            alikamil@gmail.com
-          </a>
-          .
+        <div className="flex flex-col gap-1 sm:items-end">
+          <div>
+            Version {APP_META.version} · Last updated {APP_META.lastUpdated}
+          </div>
+          <div>
+            Created by {APP_META.creator}. For questions, reach out at{" "}
+            <a
+              className="font-medium text-cyan-900 underline-offset-2 hover:underline"
+              href={`mailto:${APP_META.contactEmail}`}
+            >
+              {APP_META.contactEmail}
+            </a>
+            .
+          </div>
         </div>
       </footer>
       {privacyOpen && <PrivacyDialog onClose={() => setPrivacyOpen(false)} />}

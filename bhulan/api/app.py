@@ -34,7 +34,7 @@ app = FastAPI(
     title="Bhulan GPS API",
     description="Mobility insights and map plotting for GPS coordinates, "
     "plus ingestion endpoints for vendor feeds.",
-    version="2.1.0",
+    version="2.2.0",
 )
 
 

@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "bhulan"
-version = "2.0.0"
+version = "2.2.0"
 description = "GPS data processing and ingestion system"
 authors = ["Bhulan Contributors"]
 license = "MIT"
