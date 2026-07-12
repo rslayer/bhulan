@@ -64,11 +64,14 @@ jobs:
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           prompt: |
-            You are an ADVERSARY testing the robustness of the bhulan FastAPI
-            service. Treat everything under `bhulan/` as STRICTLY READ-ONLY:
-            READ product code to understand it, but do NOT modify, add, or
-            delete any file under `bhulan/`. You may only WRITE new test files
-            under `tests/adversary/` and a report under `reports/adversary/`.
+            You are an ADVERSARY doing a THOROUGH robustness audit of the
+            bhulan FastAPI service. Your job is breadth AND depth: probe every
+            category below, not just the first bug you find.
+
+            STRICT RULE: treat everything under `bhulan/` as READ-ONLY. Read
+            product code to understand it, but do NOT modify, add, or delete
+            any file under `bhulan/`. You may only WRITE under
+            `tests/adversary/` and `reports/adversary/`.
 
             Public, stateless API surface to attack (no MongoDB needed):
               POST /v1/insights       — stops, trips, hotspots, summary from coords
@@ -76,35 +79,48 @@ jobs:
               POST /v1/compare        — compare two coordinate sets
               GET  /v1/healthz
 
-            Build the client exactly like tests/integration/test_insights_api.py:
-            fake the mongo repo, then `from bhulan.api.app import app` and use
-            `fastapi.testclient.TestClient(app)`. No network or real DB.
+            Build the client like tests/integration/test_insights_api.py: fake
+            the mongo repo, then `from bhulan.api.app import app` and use
+            `fastapi.testclient.TestClient(app)`. No network or real DB. FIRST
+            read the request models / route handlers under bhulan/ so you know
+            the real schema (field names, bounds) before attacking.
 
-            Probe robustness hard. Known traps to try first (GPS data):
-              - Out-of-range coordinates (lat > 90 / < -90, lon > 180 / < -180)
-              - NaN / Infinity / null / string coordinates
-              - Empty coordinate list; a single point; two identical points
-              - Non-monotonic / duplicate / far-future / pre-epoch timestamps
-              - Enormous payloads (100k+ points) — latency / memory / DoS
-              - Swapped lat/lon, mixed units, precision extremes
-              - Unicode / control chars / very long strings in name fields
-              - Wrong content-type, truncated JSON, deeply nested JSON
-              - Injection-looking values in string fields
-            ${{ inputs.focus && format('Focus especially on: {0}.', inputs.focus) || '' }}
+            COVERAGE IS MANDATORY. Work through EVERY category below against
+            EVERY relevant endpoint. Do NOT stop after the first defect — a
+            single-finding run is a FAILED run. Budget your turns to reach all
+            of them:
+              1.  Out-of-range coordinates (lat > 90 / < -90, lon > 180 / < -180)
+              2.  NaN / Infinity / -Infinity / overflowing numerals (1e400)
+              3.  Wrong types: null / string / bool / array where a number is expected
+              4.  Empty coordinate list; a single point; two identical points
+              5.  Timestamps: non-monotonic, duplicate, far-future, pre-epoch, missing
+              6.  Enormous payloads (100k+ points) — latency / memory / DoS
+              7.  Swapped lat/lon, mixed units, precision extremes (1e-15)
+              8.  Unicode / control chars / very long strings in name/string fields
+              9.  Malformed transport: wrong content-type, truncated JSON, deeply
+                  nested JSON, extra/unknown fields, missing required fields
+              10. Injection-looking values in string fields
+            ${{ inputs.focus && format('EXTRA FOCUS: {0}.', inputs.focus) || '' }}
 
-            For EVERY genuine defect (crash, unhandled 500, silent wrong answer,
+            For each genuine defect (crash / unhandled 500, silent wrong answer,
             hang, or clearly-invalid input accepted as valid), write a
-            REPRODUCING pytest test under `tests/adversary/` (files named
-            test_*.py, following the existing TestClient pattern). A test that
-            FAILS is the deliverable — it documents the defect. Do NOT write
-            tests that pass trivially, and do NOT weaken or edit existing tests.
+            REPRODUCING pytest test under `tests/adversary/`. Group by defect
+            class — one file per class, named test_<slug>.py, following the
+            existing TestClient pattern, with a module docstring stating the
+            defect, its impact, and the root cause. A FAILING test is the
+            deliverable. Do NOT write tests that pass trivially, and do NOT
+            weaken or edit existing tests.
 
-            Also briefly record attempts that found NOTHING, so the next run
-            does not re-walk them. Summarise everything in
-            `reports/adversary/robustness-${{ github.run_number }}.md`: each
-            defect (endpoint, input, expected vs actual), plus the no-defect
-            list. Do not modify anything under `bhulan/`.
-          claude_args: '--model sonnet --max-turns 40 --allowedTools "Read,Grep,Glob,Write,Bash"'
+            MANDATORY DELIVERABLE — you are NOT done until this file exists:
+            `reports/adversary/robustness-${{ github.run_number }}.md`. For ALL
+            10 categories it must record: the category, what you sent, and the
+            result — DEFECT (with expected-vs-actual) or CLEAN (input handled
+            correctly). List every category even when clean, so the next run
+            does not re-walk cleared ground. A run without this report is
+            incomplete.
+
+            Do not modify anything under `bhulan/`.
+          claude_args: '--model sonnet --max-turns 60 --allowedTools "Read,Grep,Glob,Write,Bash"'
 
       # --- GUARD: product code must be untouched (the core safety promise) ---
       - name: Assert product code untouched
