@@ -1,0 +1,164 @@
+# .github/workflows/robustness.yml
+#
+# Adversarial ROBUSTNESS harness for bhulan.
+#
+# A different-model agent probes the public API for robustness weaknesses,
+# writes REPRODUCING failing pytest tests, and opens a PR with a findings
+# report. It NEVER edits product code: everything under `bhulan/` is
+# read-only, and a guard step fails the run if any product file changes.
+# The failing tests ARE the deliverable — each one documents a real defect.
+#
+# Trigger: workflow_dispatch ONLY (Actions -> "Run workflow", or
+#   `gh workflow run robustness.yml`). claude-code-action does not support
+#   the `push` event, so there is deliberately no push trigger.
+#
+# Setup once (repo admin): add the CLAUDE_CODE_OAUTH_TOKEN secret to THIS
+#   repo (Settings -> Secrets and variables -> Actions), or run
+#   `/install-github-app` from Claude Code inside this repo.
+
+name: robustness
+
+on:
+  workflow_dispatch:
+    inputs:
+      focus:
+        description: "Optional area to focus the adversary on (e.g. '/v1/plot', 'timestamp handling')"
+        required: false
+        default: ""
+
+concurrency:
+  group: robustness-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write            # commit findings to a branch
+  pull-requests: write       # open the findings PR
+  id-token: write            # OIDC token for anthropics/claude-code-action
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Poetry
+        run: pipx install poetry==1.8.3
+
+      - name: Install dependencies
+        run: poetry install --no-root
+
+      # --- ADVERSARY (read-only on product code) ---
+      # continue-on-error: a turn-cap stop must not abort the run; whatever
+      # tests/report the adversary produced still flow to the findings PR.
+      - name: Adversary probe
+        continue-on-error: true
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: |
+            You are an ADVERSARY testing the robustness of the bhulan FastAPI
+            service. Treat everything under `bhulan/` as STRICTLY READ-ONLY:
+            READ product code to understand it, but do NOT modify, add, or
+            delete any file under `bhulan/`. You may only WRITE new test files
+            under `tests/adversary/` and a report under `reports/adversary/`.
+
+            Public, stateless API surface to attack (no MongoDB needed):
+              POST /v1/insights       — stops, trips, hotspots, summary from coords
+              POST /v1/plot/validate  — validate/normalise coords for plotting
+              POST /v1/compare        — compare two coordinate sets
+              GET  /v1/healthz
+
+            Build the client exactly like tests/integration/test_insights_api.py:
+            fake the mongo repo, then `from bhulan.api.app import app` and use
+            `fastapi.testclient.TestClient(app)`. No network or real DB.
+
+            Probe robustness hard. Known traps to try first (GPS data):
+              - Out-of-range coordinates (lat > 90 / < -90, lon > 180 / < -180)
+              - NaN / Infinity / null / string coordinates
+              - Empty coordinate list; a single point; two identical points
+              - Non-monotonic / duplicate / far-future / pre-epoch timestamps
+              - Enormous payloads (100k+ points) — latency / memory / DoS
+              - Swapped lat/lon, mixed units, precision extremes
+              - Unicode / control chars / very long strings in name fields
+              - Wrong content-type, truncated JSON, deeply nested JSON
+              - Injection-looking values in string fields
+            ${{ inputs.focus && format('Focus especially on: {0}.', inputs.focus) || '' }}
+
+            For EVERY genuine defect (crash, unhandled 500, silent wrong answer,
+            hang, or clearly-invalid input accepted as valid), write a
+            REPRODUCING pytest test under `tests/adversary/` (files named
+            test_*.py, following the existing TestClient pattern). A test that
+            FAILS is the deliverable — it documents the defect. Do NOT write
+            tests that pass trivially, and do NOT weaken or edit existing tests.
+
+            Also briefly record attempts that found NOTHING, so the next run
+            does not re-walk them. Summarise everything in
+            `reports/adversary/robustness-${{ github.run_number }}.md`: each
+            defect (endpoint, input, expected vs actual), plus the no-defect
+            list. Do not modify anything under `bhulan/`.
+          claude_args: '--model sonnet --max-turns 40 --allowedTools "Read,Grep,Glob,Write,Bash"'
+
+      # --- GUARD: product code must be untouched (the core safety promise) ---
+      - name: Assert product code untouched
+        run: |
+          if [ -n "$(git status --porcelain -- bhulan/)" ]; then
+            echo "::error ::Adversary changed product code under bhulan/ — aborting. This harness must never edit the product."
+            git status --porcelain -- bhulan/
+            git --no-pager diff -- bhulan/ | head -200
+            exit 1
+          fi
+          echo "OK: bhulan/ product code is untouched."
+
+      # --- RUN the adversary tests — failures ARE the findings ---
+      - name: Run adversary tests
+        id: probe_tests
+        env:
+          PYTHONPATH: .
+        run: |
+          set +e
+          mkdir -p tests/adversary reports/adversary
+          [ -f tests/adversary/__init__.py ] || touch tests/adversary/__init__.py
+          OUT="$(poetry run pytest tests/adversary/ --no-cov -q -p no:cacheprovider 2>&1)"
+          echo "$OUT"
+          DEFECTS="$(printf '%s' "$OUT" | grep -oE '[0-9]+ failed' | grep -oE '[0-9]+' | head -1)"
+          PASSED="$(printf '%s' "$OUT" | grep -oE '[0-9]+ passed' | grep -oE '[0-9]+' | head -1)"
+          echo "defects=${DEFECTS:-0}" >> "$GITHUB_OUTPUT"
+          echo "passed=${PASSED:-0}"  >> "$GITHUB_OUTPUT"
+          exit 0
+
+      # --- Open a PR with the findings (token auth re-asserted for the push) ---
+      - name: Open findings PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+          git config user.name  "robustness-bot"
+          git config user.email "robustness-bot@users.noreply.github.com"
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git"
+          N="${{ github.run_number }}"
+          DEFECTS="${{ steps.probe_tests.outputs.defects }}"
+          BRANCH="robustness/run-$N"
+          git checkout -b "$BRANCH"
+          git add tests/adversary reports/adversary
+          if ! git commit -m "robustness run $N: $DEFECTS defect(s) found"; then
+            echo "No new findings to commit — the adversary reported nothing. Skipping PR."
+            exit 0
+          fi
+          git push -u origin "$BRANCH"
+          PR_URL="$(gh pr create --base "${{ github.ref_name }}" --head "$BRANCH" \
+            --title "Robustness run $N — $DEFECTS defect(s) found" \
+            --body "Automated adversarial robustness probe.
+
+          Each **failing** test under \`tests/adversary/\` documents a real defect the adversary reproduced against the live \`/v1\` API. Read \`reports/adversary/robustness-$N.md\` for details, then decide what (if anything) to fix — this harness only reports, it never changes product code (guarded).
+
+          Defects found: **$DEFECTS**")"
+          echo "PR: $PR_URL"
+          gh pr comment "$PR_URL" --body "🔍 **Robustness run $N** reproduced **$DEFECTS** defect(s). See \`reports/adversary/robustness-$N.md\`."
