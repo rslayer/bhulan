@@ -5,13 +5,16 @@ Provides REST API endpoints for webhook ingestion, job status, and health checks
 """
 
 import json
+import math
 import os
 import uuid
 from typing import Any, Dict, List, Optional, Union
 
 from fastapi import Body, Depends, FastAPI, Header, HTTPException, Query
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -68,6 +71,36 @@ app.add_middleware(
 limiter = Limiter(key_func=get_remote_address, default_limits=[])
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
+
+
+def _scrub_non_finite(obj: Any) -> Any:
+    """Recursively replace non-finite floats (NaN/inf) with their text form."""
+    if isinstance(obj, float):
+        return repr(obj) if (math.isnan(obj) or math.isinf(obj)) else obj
+    if isinstance(obj, dict):
+        return {k: _scrub_non_finite(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_scrub_non_finite(v) for v in obj]
+    return obj
+
+
+@app.exception_handler(RequestValidationError)
+async def _validation_exception_handler(
+    _request: Any, exc: RequestValidationError
+) -> JSONResponse:
+    """
+    Render 422s even when the rejected input is a non-finite float.
+
+    FastAPI's default handler echoes the offending value back in the error
+    detail's ``input`` field. When that value is ``NaN``/``Infinity`` (or an
+    overflowing numeral like ``1e400`` that stdlib ``json`` parses to ``inf``),
+    Starlette's ``JSONResponse`` — which serializes with ``allow_nan=False`` —
+    raises while *building* the 422 body, surfacing to the client as an
+    unhandled 500. Scrubbing non-finite floats first keeps the 422 clean while
+    preserving the default response shape for every ordinary validation error.
+    """
+    detail = _scrub_non_finite(jsonable_encoder(exc.errors()))
+    return JSONResponse(status_code=422, content={"detail": detail})
 
 app.include_router(insights_router)
 app.include_router(compare_router)
