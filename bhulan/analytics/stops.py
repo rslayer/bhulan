@@ -1,15 +1,22 @@
 """
 Stop detection over a time-ordered GPS track.
 
-A "stop" is a contiguous run of samples whose pairwise distance stays within
-``radius_m`` for at least ``min_duration_s``. The implementation uses a
-sliding window plus a KD-tree over the local-tangent-plane projection, which
-brings the worst case down from O(n*m) (the legacy algorithm) to O(n log n)
-in the common case.
+A "stop" is a contiguous run of samples whose spread (the maximum distance
+from the run's centroid) stays within ``radius_m`` for at least
+``min_duration_s``. The sliding window grows one sample at a time; to keep a
+single long cluster from costing O(n^2) — the naive version recomputes the
+centroid spread over the *entire* window on every growth step — it carries a
+cheap running upper bound on the spread (the centroid can only shift by
+~1/window_size per added point) and falls back to an exact recompute only
+when that bound crosses ``radius_m``. The accept/reject decision is identical
+to a full recompute every step, so results are unchanged; the bound merely
+skips provably-safe work, bringing the common tight-cluster case down to
+~O(n).
 """
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from datetime import datetime
 from typing import List, Optional, Sequence
@@ -45,6 +52,47 @@ def _cluster_radius_m(xs: np.ndarray, ys: np.ndarray) -> float:
     return float(np.max(d)) if d.size else 0.0
 
 
+def _cluster_end(xs: np.ndarray, ys: np.ndarray, i: int, n: int, radius_m: float) -> int:
+    """
+    Largest ``end >= i`` such that the window ``[i..end]`` has centroid-spread
+    ``<= radius_m``, growing one sample at a time and stopping at the first
+    sample that would push the spread over ``radius_m``.
+
+    Equivalent to calling :func:`_cluster_radius_m` on every prefix window, but
+    avoids the O(k^2) blow-up on a long single cluster: it maintains a running
+    upper bound ``r_est`` on the current window's spread and only pays for an
+    exact recompute when that bound crosses ``radius_m``. Because a decision to
+    *extend* is only taken when the spread is provably (bound) or exactly
+    ``<= radius_m``, and a *break* only when the exact spread exceeds it, the
+    result is identical to the naive per-step recompute.
+    """
+    sx = float(xs[i])
+    sy = float(ys[i])
+    m = 1
+    r_est = 0.0
+    j = i
+    while j + 1 < n:
+        x = float(xs[j + 1])
+        y = float(ys[j + 1])
+        cox, coy = sx / m, sy / m
+        sx += x
+        sy += y
+        m += 1
+        cnx, cny = sx / m, sy / m
+        # The centroid moves by `shift`; every existing point's distance to the
+        # new centroid grows by at most `shift`, so this stays a valid bound.
+        shift = math.hypot(cnx - cox, cny - coy)
+        d_new = math.hypot(x - cnx, y - cny)
+        r_est = max(r_est + shift, d_new)
+        if r_est > radius_m:
+            r_exact = _cluster_radius_m(xs[i : j + 2], ys[i : j + 2])
+            if r_exact > radius_m:
+                return j  # adding j+1 breaks the cluster; window ends at j
+            r_est = r_exact  # bound was loose — reset it tight and keep going
+        j += 1
+    return j
+
+
 def detect_stops(
     points: Sequence[TrackSample],
     radius_m: float = DEFAULT_RADIUS_M,
@@ -74,16 +122,7 @@ def detect_stops(
     stops: List[Stop] = []
     i = 0
     while i < n:
-        j = i + 1
-        while j < n:
-            window_xs = xs[i : j + 1]
-            window_ys = ys[i : j + 1]
-            r = _cluster_radius_m(window_xs, window_ys)
-            if r > radius_m:
-                break
-            j += 1
-
-        end = j - 1
+        end = _cluster_end(xs, ys, i, n, radius_m)
         if end > i:
             duration = (
                 ts_points[end].ts_utc - ts_points[i].ts_utc  # type: ignore[union-attr, operator]

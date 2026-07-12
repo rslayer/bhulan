@@ -50,6 +50,8 @@ jobs:
           poetry run pytest \
             tests/unit/ \
             tests/integration/test_insights_api.py \
+            tests/adversary/test_nan_infinity_floats_crash.py \
+            tests/adversary/test_stop_detection_quadratic_blowup.py \
             --no-cov -q
 
       - name: Verify OpenAPI schema is up to date
