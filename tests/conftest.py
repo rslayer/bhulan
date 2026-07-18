@@ -9,6 +9,22 @@ import os
 
 import pytest
 
+# Point the app under test at the same database the integration fixtures use.
+#
+# The integration fixtures build their repos with an explicit
+# ``db_name="bhulan_test"``, but the app builds its own via
+# ``MongoTrackPointRepository()`` with no arguments, which falls back to
+# ``settings.MONGO_DB_NAME`` (default ``"bhulan"``). The two therefore wrote to
+# and read from *different* databases: ingestion succeeded against ``bhulan``
+# while assertions counted documents in ``bhulan_test`` and found zero. That
+# mismatch is why 15 of these tests fail the moment they actually run.
+#
+# ``settings`` is a module-level singleton evaluated on import, so this has to
+# happen before any test module imports the app — conftest is loaded first, so
+# this is the right place. ``setdefault`` keeps an explicit override working.
+# It also stops the suite from ever writing into the default ``bhulan`` DB.
+os.environ.setdefault("MONGO_DB_NAME", "bhulan_test")
+
 
 def pytest_configure(config):
     """Configure pytest with custom markers."""
