@@ -52,17 +52,29 @@ Category 7 of run-2 noted `speed_mps` had "no ceiling" and flagged it as a
 policy gap for a future pass, but tested only `1e300` (whose `* 3.6` stays
 finite → `200`) and so did not surface the `inf` crash.
 
-Fix: bound `speed_mps` with a finite, overflow-safe ceiling
-(`MAX_SPEED_MPS = 1e7`, ~36 million km/h — orders of magnitude beyond any real
-GPS-tracked object) plus `allow_inf_nan=False`. `speed_mps` is the only
-unbounded caller-supplied float feeding `max_speed_mps`, so this single
-constraint closes every downstream overflow site: the structured path now
-returns a clean `422`, and the text/file path drops the row via `_safe_point`.
+Fix: an implausible `speed_mps` is treated as **missing** rather than rejected.
+A `mode="before"` field validator on `PointIn.speed_mps` drops any value that is
+non-finite or above `MAX_SPEED_MPS` (1e7 m/s, ~36 million km/h — orders of
+magnitude beyond any real GPS-tracked object) to `None`, before it can reach the
+`ge=0` constraint or the analytics. `speed_mps` is the only unbounded
+caller-supplied float feeding `max_speed_mps`, so this single guard closes every
+downstream overflow site.
 
-**Intentional behavior change:** values above `1e7` m/s (including run-2's
-`1e300` example, previously accepted with `200`) now return `422`. These are
-physically impossible for the vehicles/people/fleet this surface tracks, and
-were already flagged as a gap in run-2.
+Rationale for ignoring rather than rejecting: a physically impossible
+device-reported speed is bad telemetry, not a malformed request. Failing the
+whole point (or the whole batch) over one bad field is disproportionate, and the
+pipeline already derives speed from distance/time for points that carry no
+`speed_mps` at all — so dropping the value degrades gracefully instead of losing
+the reading. Verified: a two-point track whose reported speed is `1e400` still
+returns `200` with a distance/time-derived `max_speed_kmh`.
+
+Values that are merely *invalid* rather than implausible — a negative speed, a
+non-numeric string — are passed through untouched and still produce the usual
+`422`.
+
+**Behavior note:** run-2's `1e300` example (previously accepted with `200` and
+reflected as `max_speed_kmh: 3.6e+300`) is now silently ignored, so the response
+no longer carries a meaningless magnitude. The request still succeeds.
 
 ---
 

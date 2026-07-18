@@ -1775,7 +1775,6 @@
             "anyOf": [
               {
                 "type": "number",
-                "maximum": 10000000.0,
                 "minimum": 0.0
               },
               {
@@ -1783,7 +1782,7 @@
               }
             ],
             "title": "Speed Mps",
-            "description": "Optional device-reported speed"
+            "description": "Optional device-reported speed; implausible values are ignored"
           }
         },
         "type": "object",
