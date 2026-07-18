@@ -14,6 +14,22 @@ jobs:
   backend:
     name: Backend (pytest + ruff + mypy)
     runs-on: ubuntu-latest
+
+    # The integration suite (ingestion, webhooks, storage, end-to-end) talks to
+    # a real MongoDB at mongodb://localhost:27017 — see tests/conftest.py.
+    # Without this service those tests silently skip, which is how 59 of them
+    # went unrun for so long.
+    services:
+      mongo:
+        image: mongo:7
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.adminCommand({ping:1})'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
     steps:
       - uses: actions/checkout@v4
 
@@ -46,12 +62,15 @@ jobs:
       - name: Run all unit + integration tests
         env:
           PYTHONPATH: .
+          # Fail loudly if the mongo service above is not reachable, rather
+          # than silently skipping the integration suite and reporting green.
+          BHULAN_REQUIRE_MONGO: "1"
         run: |
           poetry run pytest \
             tests/unit/ \
-            tests/integration/test_insights_api.py \
+            tests/integration/ \
             tests/adversary/ \
-            --no-cov -q
+            --no-cov -q -rs
 
       - name: Verify OpenAPI schema is up to date
         env:
