@@ -100,7 +100,21 @@ async def _validation_exception_handler(
     unhandled 500. Scrubbing non-finite floats first keeps the 422 clean while
     preserving the default response shape for every ordinary validation error.
     """
-    detail = _scrub_non_finite(jsonable_encoder(exc.errors()))
+    try:
+        detail: Any = _scrub_non_finite(jsonable_encoder(exc.errors()))
+    except RecursionError:
+        # A pathologically deep input (e.g. thousands of nested JSON arrays)
+        # is echoed back in each error's ``input`` field; ``jsonable_encoder``
+        # recurses once per level and blows the stack while *building* the 422
+        # body — surfacing to the client as an unhandled 500. Once the stack
+        # unwinds back here there is ample headroom to return a compact,
+        # input-free 422 instead of crashing.
+        detail = [
+            {
+                "type": "too_deeply_nested",
+                "msg": "Request body is too deeply nested to process.",
+            }
+        ]
     return JSONResponse(status_code=422, content={"detail": detail})
 
 app.include_router(insights_router)

@@ -188,6 +188,31 @@ def parse_plain_text(text: str) -> List[PointIn]:
     return points
 
 
+def _geojson_position(pos: Any) -> Tuple[float, float]:
+    """Convert a GeoJSON ``[lon, lat, ...]`` position to ``(lat, lon)``.
+
+    GeoJSON positions are ``[lon, lat]`` (optionally with elevation). Anything
+    that is not a sequence of at least two numeric values is malformed input;
+    raise :class:`ParseError` so callers surface a clean 4xx rather than letting
+    a bare ``IndexError``/``TypeError``/``ValueError`` bubble up as a 500.
+    """
+    if not isinstance(pos, (list, tuple)) or len(pos) < 2:
+        raise ParseError(f"Malformed GeoJSON position (need [lon, lat]): {pos!r}")
+    try:
+        lon = float(pos[0])
+        lat = float(pos[1])
+    except (TypeError, ValueError) as e:
+        raise ParseError(f"Non-numeric GeoJSON coordinates: {pos!r}") from e
+    return (lat, lon)
+
+
+def _geojson_positions(coords: Any, gtype: str) -> List[Any]:
+    """Return the outer sequence of positions for a line/multi geometry."""
+    if not isinstance(coords, (list, tuple)):
+        raise ParseError(f"Malformed GeoJSON coordinates for {gtype}: {coords!r}")
+    return list(coords)
+
+
 def _coords_from_geojson_geom(
     geom: Dict[str, Any]
 ) -> List[Tuple[float, float]]:
@@ -196,13 +221,13 @@ def _coords_from_geojson_geom(
     if coords is None:
         return []
     if gtype == "Point":
-        return [(float(coords[1]), float(coords[0]))]
+        return [_geojson_position(coords)]
     if gtype == "MultiPoint" or gtype == "LineString":
-        return [(float(c[1]), float(c[0])) for c in coords]
+        return [_geojson_position(c) for c in _geojson_positions(coords, gtype)]
     if gtype == "MultiLineString":
         out: List[Tuple[float, float]] = []
-        for line in coords:
-            out.extend((float(c[1]), float(c[0])) for c in line)
+        for line in _geojson_positions(coords, gtype):
+            out.extend(_geojson_position(c) for c in _geojson_positions(line, gtype))
         return out
     return []
 
@@ -291,8 +316,14 @@ def parse_any(text: str) -> List[PointIn]:
     if stripped.startswith("{") or stripped.startswith("["):
         try:
             return parse_json(text)
-        except (json.JSONDecodeError, ParseError):
+        except json.JSONDecodeError:
+            # Not actually JSON despite the leading brace/bracket — fall back
+            # to CSV/plain-text detection below.
             pass
+        # A ``ParseError`` here means the payload *is* valid JSON but is
+        # structurally invalid as points/GeoJSON (bad coordinates, unknown
+        # geometry). That is a hard input error: propagate it so the caller
+        # returns a clean 4xx instead of silently trying to read JSON as CSV.
 
     try:
         rows = parse_csv_text(text)
