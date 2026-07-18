@@ -21,6 +21,10 @@ services:
       # Tune per-IP rate limits here (slowapi syntax, e.g. "30/minute").
       RATE_LIMIT_INSIGHTS: "30/minute"
       RATE_LIMIT_PLOT: "60/minute"
+      # Comma-separated allowlist of reverse-proxy peer IPs whose
+      # X-Forwarded-For header should be honored for rate-limit keying.
+      # Use "*" only when the container is unreachable except via the proxy.
+      TRUSTED_PROXIES: ""
       # Uncomment once a mongo service is added to enable ingestion endpoints.
       # MONGO_URI: "mongodb://mongo:27017"
     restart: unless-stopped

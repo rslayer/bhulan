@@ -55,8 +55,20 @@ ENV ALLOWED_ORIGINS="*" \
     API_HOST=0.0.0.0 \
     API_PORT=8000
 
+# Drop root before running the app. The runtime only needs read access to
+# /app, so we don't chown — that keeps the image reproducible and layer-
+# cache friendly. If you add writable paths (e.g. SQLite), chown them here.
+RUN groupadd --system --gid 1001 bhulan \
+    && useradd --system --uid 1001 --gid bhulan --home-dir /app --shell /usr/sbin/nologin bhulan
+USER bhulan
+
 EXPOSE 8000
+# Use Python for the healthcheck so we don't rely on curl remaining on PATH
+# for the non-root user (and to avoid an extra apt dep in slim builds).
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s \
-    CMD curl -fsS http://127.0.0.1:${PORT:-8000}/v1/healthz || exit 1
+    CMD python -c "import os,urllib.request,sys; \
+        p=os.environ.get('PORT','8000'); \
+        sys.exit(0 if urllib.request.urlopen(f'http://127.0.0.1:{p}/v1/healthz', timeout=3).status == 200 else 1)" \
+        || exit 1
 
 CMD ["sh", "-c", "uvicorn bhulan.api.app:app --host 0.0.0.0 --port ${PORT:-8000}"]

@@ -12,8 +12,6 @@ from typing import List, Optional, Tuple
 
 from fastapi import APIRouter, Body, Depends, File, HTTPException, Request, UploadFile
 from pydantic import BaseModel, Field
-from slowapi import Limiter
-from slowapi.util import get_remote_address
 
 from bhulan.analytics.file_parsers import parse_file_bytes
 from bhulan.analytics.insights import (
@@ -25,15 +23,12 @@ from bhulan.analytics.insights import (
 )
 from bhulan.analytics.parsers import ParseError, estimate_input_rows, parse_any
 from bhulan.api.deps import current_user_optional
+from bhulan.api.limiter import limiter
 from bhulan.auth import service as auth_service
 from bhulan.auth.service import User
 from bhulan.config.settings import settings
 
 router = APIRouter(prefix="/v1", tags=["insights"])
-
-# Local limiter instance — shares the same keying function as the app-level
-# limiter so slowapi's app.state handler recognizes decorated routes.
-limiter = Limiter(key_func=get_remote_address)
 
 
 class PlotRequest(BaseModel):
