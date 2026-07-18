@@ -7,6 +7,7 @@ summary metrics, detected stops, and motion segments. Pure Python, no I/O.
 
 from __future__ import annotations
 
+import math
 from datetime import datetime
 from typing import List, Optional, Tuple
 
@@ -38,15 +39,15 @@ from bhulan.analytics.trips import (
 MS_TO_KMH = 3.6
 MAX_POINTS = 100_000
 
-# Overflow-safety ceiling for device-reported speed. ``speed_mps`` is the only
+# Plausibility ceiling for device-reported speed. ``speed_mps`` is the only
 # unbounded caller-supplied float that flows into the summary's ``max_speed_mps``
 # and gets multiplied by ``MS_TO_KMH`` (see ``compute_insights`` / ``build_trip``).
-# Without a finite cap, an ``inf``/``NaN`` value (e.g. JSON ``1e400``) — or even a
-# finite one large enough that ``value * 3.6`` overflows to ``inf`` (~5e307) — ends
-# up as a non-finite float in a *successful* response, which Starlette's
-# ``JSONResponse`` (``allow_nan=False``) then refuses to serialize, surfacing as an
-# unhandled 500. 1e7 m/s (36 million km/h) is orders of magnitude beyond any real
-# GPS-tracked object, so this rejects only garbage while keeping the math finite.
+# Left unbounded, an ``inf``/``NaN`` value (e.g. JSON ``1e400``) — or even a finite
+# one large enough that ``value * 3.6`` overflows to ``inf`` (~5e307) — ends up as
+# a non-finite float in a *successful* response, which Starlette's ``JSONResponse``
+# (``allow_nan=False``) then refuses to serialize, surfacing as an unhandled 500.
+# 1e7 m/s (36 million km/h) is orders of magnitude beyond any real GPS-tracked
+# object, so anything above it is bad telemetry rather than a usable reading.
 MAX_SPEED_MPS = 1e7
 
 
@@ -61,10 +62,35 @@ class PointIn(BaseModel):
     speed_mps: Optional[float] = Field(
         None,
         ge=0,
-        le=MAX_SPEED_MPS,
-        allow_inf_nan=False,
-        description="Optional device-reported speed",
+        description="Optional device-reported speed; implausible values are ignored",
     )
+
+    @field_validator("speed_mps", mode="before")
+    @classmethod
+    def _drop_implausible_speed(cls, v: object) -> object:
+        """Treat an implausible device-reported speed as missing.
+
+        A non-finite (``inf``/``NaN``, e.g. from JSON ``1e400``) or absurdly
+        large ``speed_mps`` is bad telemetry, not a usable reading — and if it
+        reaches the response it serializes to a non-finite float and 500s the
+        request (see ``MAX_SPEED_MPS``). Rather than rejecting the whole point
+        over one bad field, drop the value: the analytics already derive speed
+        from distance/time for points that carry no ``speed_mps`` at all.
+
+        Runs ``mode="before"`` so the bad value never reaches the ``ge=0``
+        constraint. Values that are merely *invalid* rather than implausible
+        (e.g. a negative speed, a non-numeric string) are passed through
+        untouched so they still produce the usual 422.
+        """
+        if v is None:
+            return None
+        try:
+            as_float = float(v)  # type: ignore[arg-type]
+        except (TypeError, ValueError):
+            return v  # not a number — let normal validation report it
+        if not math.isfinite(as_float) or as_float > MAX_SPEED_MPS:
+            return None
+        return v
 
 
 class InsightsOptions(BaseModel):
