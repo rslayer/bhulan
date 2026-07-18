@@ -802,7 +802,7 @@ export interface components {
             ts_utc?: string | null;
             /**
              * Speed Mps
-             * @description Optional device-reported speed
+             * @description Optional device-reported speed; implausible values are ignored
              */
             speed_mps?: number | null;
         };
