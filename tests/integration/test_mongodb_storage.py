@@ -231,7 +231,12 @@ class TestJobRegistry:
         assert job['stats']['accepted'] == 95
         assert job['stats']['rejected'] == 5
         assert 'finished_at' in job
-        assert job['error_sample'] == {0: "Sample error"}
+        # Callers key error_sample by row index (Dict[int, str]), but BSON
+        # documents may only have string keys, so update_job_status coerces
+        # them on write and they read back as strings. Asserting int keys here
+        # was never achievable — it was the same defect that made this write
+        # raise InvalidDocument before the coercion was added.
+        assert job['error_sample'] == {"0": "Sample error"}
 
     def test_get_nonexistent_job(self, job_registry):
         """Test retrieving non-existent job."""
