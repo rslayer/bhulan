@@ -192,7 +192,14 @@ class MongoJobRegistry(JobRegistry):
             update_doc["stats"] = stats
 
         if error_sample:
-            update_doc["error_sample"] = error_sample
+            # BSON documents may only have string keys, but ``error_sample`` is
+            # keyed by row index (``Dict[int, str]``) everywhere it is built —
+            # the webhook route, file/Kafka/MQTT ingestion. Writing it raw
+            # raises ``InvalidDocument`` and fails the status update for *any*
+            # job that recorded errors. Coerce here, at the storage boundary,
+            # rather than making every caller stringify. (JSON object keys are
+            # strings anyway, so this also round-trips cleanly to API clients.)
+            update_doc["error_sample"] = {str(k): v for k, v in error_sample.items()}
 
         self.collection.update_one({"ingest_id": ingest_id}, {"$set": update_doc})
 
