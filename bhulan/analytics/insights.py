@@ -38,6 +38,17 @@ from bhulan.analytics.trips import (
 MS_TO_KMH = 3.6
 MAX_POINTS = 100_000
 
+# Overflow-safety ceiling for device-reported speed. ``speed_mps`` is the only
+# unbounded caller-supplied float that flows into the summary's ``max_speed_mps``
+# and gets multiplied by ``MS_TO_KMH`` (see ``compute_insights`` / ``build_trip``).
+# Without a finite cap, an ``inf``/``NaN`` value (e.g. JSON ``1e400``) — or even a
+# finite one large enough that ``value * 3.6`` overflows to ``inf`` (~5e307) — ends
+# up as a non-finite float in a *successful* response, which Starlette's
+# ``JSONResponse`` (``allow_nan=False``) then refuses to serialize, surfacing as an
+# unhandled 500. 1e7 m/s (36 million km/h) is orders of magnitude beyond any real
+# GPS-tracked object, so this rejects only garbage while keeping the math finite.
+MAX_SPEED_MPS = 1e7
+
 
 class PointIn(BaseModel):
     """One GPS sample as it arrives over the wire."""
@@ -47,7 +58,13 @@ class PointIn(BaseModel):
     ts_utc: Optional[datetime] = Field(
         None, description="Timestamp in UTC; required for any time-based insight"
     )
-    speed_mps: Optional[float] = Field(None, ge=0, description="Optional device-reported speed")
+    speed_mps: Optional[float] = Field(
+        None,
+        ge=0,
+        le=MAX_SPEED_MPS,
+        allow_inf_nan=False,
+        description="Optional device-reported speed",
+    )
 
 
 class InsightsOptions(BaseModel):
