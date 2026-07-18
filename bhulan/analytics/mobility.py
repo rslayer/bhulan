@@ -45,7 +45,15 @@ def _to_utc(ts: Optional[datetime]) -> Optional[datetime]:
         return None
     if ts.tzinfo is None:
         return ts.replace(tzinfo=timezone.utc)
-    return ts.astimezone(timezone.utc)
+    try:
+        return ts.astimezone(timezone.utc)
+    except (OverflowError, OSError):
+        # Timestamps at the very edge of ``datetime``'s representable range
+        # (year 1 / year 9999) overflow when the offset is shifted to UTC —
+        # e.g. ``0001-01-01T00:00:00+14:00`` would underflow past year 1.
+        # These are implausible for GPS data; reinterpret the wall-clock time
+        # as UTC rather than crashing the whole request with a 500.
+        return ts.replace(tzinfo=timezone.utc)
 
 
 def prepare_track(points: Sequence[TrackSample]) -> List[TrackSample]:
