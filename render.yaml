@@ -2,7 +2,11 @@ services:
   - type: web
     name: bhulan
     runtime: docker
-    plan: free
+    # Starter is Render's cheapest web tier without free-plan spin-down, so the
+    # demo has no cold-start warmup. This is a blueprint-managed field: if it
+    # ever reads "free" again, a Blueprint sync will downgrade the service and
+    # the ~30-60s cold start returns. Change here, not only in the dashboard.
+    plan: starter
     dockerfilePath: ./Dockerfile
     healthCheckPath: /v1/healthz
     envVars:
