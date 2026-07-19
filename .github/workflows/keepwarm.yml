@@ -1,0 +1,62 @@
+# Keep the public demo warm (and double as a crude uptime check).
+#
+# The demo runs on Render's free plan, which spins the instance down after
+# ~15 minutes without inbound traffic. The next visitor then pays a 30-60s cold
+# start, which reads as "the site is down". A periodic request keeps it awake.
+#
+# Honest limitations — this is best-effort, not a guarantee:
+#   * GitHub's cron is not punctual. Scheduled runs are frequently delayed, and
+#     under load they can be skipped entirely, so gaps longer than the 15-minute
+#     idle window will still happen and some visitors will still hit a cold
+#     start. A dedicated uptime pinger (UptimeRobot et al.) fires far more
+#     reliably at this interval, and Render's paid Starter plan removes
+#     spin-down altogether — either is a stronger fix than this workflow.
+#   * GitHub disables scheduled workflows in public repos after 60 days with no
+#     repository activity. If the demo starts sleeping again, check that this
+#     workflow is still enabled.
+#   * Render's free tier includes 750 instance-hours/month per account. Keeping
+#     one service awake around the clock uses roughly 730 of them, so this
+#     effectively spends the whole free allowance on this service. Narrow the
+#     cron to the hours you actually demo in if you need headroom for others.
+name: Keep demo warm
+
+on:
+  schedule:
+    # Every 10 minutes — inside Render's ~15 minute idle window, with slack for
+    # GitHub's scheduling delays.
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+# Never let a slow cold start pile up overlapping runs.
+concurrency:
+  group: keepwarm
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  ping:
+    name: Ping /v1/healthz
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Ping the demo until it answers
+        env:
+          # Change here if the demo moves; keeps the URL in one place.
+          DEMO_URL: https://bhulan.onrender.com/v1/healthz
+        run: |
+          set -uo pipefail
+          # --max-time 90 so a genuine cold start counts as success rather than
+          # a timeout — waking the instance is the entire point.
+          for attempt in 1 2 3; do
+            code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 90 "$DEMO_URL" || echo "000")
+            echo "attempt $attempt -> HTTP $code"
+            if [ "$code" = "200" ]; then
+              echo "demo is awake"
+              exit 0
+            fi
+            [ "$attempt" -lt 3 ] && sleep 20
+          done
+          echo "::error ::$DEMO_URL did not return 200 after 3 attempts — demo may be down"
+          exit 1
