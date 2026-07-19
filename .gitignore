@@ -13,5 +13,10 @@ visualize_palo_alto_standalone.py
 # IDE
 .idea/
 
+# Local Python virtualenv (see "Quick start" in README.md — this is the
+# supported local run path when Poetry isn't installed).
+.venv/
+venv/
+
 # Local AI/worktree scratch copies
 .claude/

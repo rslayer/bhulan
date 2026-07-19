@@ -36,6 +36,36 @@ npm run dev                                         # http://localhost:5173
 
 The Vite dev server proxies `/v1` requests to the backend automatically.
 
+### Without Poetry (venv + uv or pip)
+
+Poetry is the documented path, but a plain virtualenv works and is what
+`.gitignore` expects (`.venv/`):
+
+```bash
+# Backend
+uv venv .venv && uv pip install --python .venv/bin/python -e .   # or: python3 -m venv .venv && .venv/bin/pip install -e .
+PYTHONPATH=. .venv/bin/python -m uvicorn bhulan.api.app:app --reload
+
+# Frontend (second terminal)
+cd web && npm ci && npm run dev
+```
+
+Notes for local runs:
+
+* Use `npm ci`, not `npm install`, if the dev server dies with
+  `Cannot find module @rollup/rollup-darwin-arm64`. That is a known npm
+  optional-dependency bug that leaves the native binary missing; a clean
+  install from the lockfile fixes it.
+* If `localhost` resolves to IPv6 (`::1`) on your machine, bind the backend to
+  `127.0.0.1` (the dev proxy targets IPv4 explicitly). A backend that is only
+  reachable over one stack makes Vite fall back to serving `index.html`, so API
+  calls come back as HTML instead of JSON.
+* Behind a TLS-intercepting proxy, `uv` needs `UV_SYSTEM_CERTS=1`.
+* Use Node 20 (what CI pins). On much newer Node the `auth.test.ts` frontend
+  unit tests fail locally because jsdom's `localStorage` misbehaves — and
+  `src/lib/auth.ts` deliberately swallows storage exceptions, so it surfaces as
+  four confusing "expected null" assertions rather than an error.
+
 ## API endpoints
 
 | Method | Path | Description |
