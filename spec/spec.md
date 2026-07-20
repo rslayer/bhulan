@@ -5,91 +5,87 @@
 > triage), then opens a PR. The loop NEVER merges to master and NEVER deploys —
 > you do. bhulan is a public demo; keep it PR-gated.
 
-**Status:** cycle 1
-**Cycle of last revision:** 1
+**Status:** cycle 2
+**Cycle of last revision:** 2
 
 ---
 
 ## 1. This cycle's single outcome
 
-**Make `detect_stops` and `detect_hotspots` time-gap-aware**, so a real-world
-absence between two visits to the same place is no longer silently reported as
-one continuous stop/hotspot spanning the entire gap.
+**Make `merge_nearby_stops` gap-aware**, so it can no longer re-merge two
+distinct visits back into one stop spanning a real-world absence — silently
+undoing cycle 1's fix.
 
-Found by the robustness sweep (run 4, `reports/adversary/robustness-4.md`) — a
-metamorphic / silently-wrong-answer defect, the class prior crash-focused runs
-never looked at. A device parked at a spot for 10 min, switched off for a week
-(no samples), then parked at the *same* spot for 10 min is reported as **one
-stop of `duration_min: 10099`** and **one hotspot visit** (`visit_count: 1`,
-`time_spent_min: 10099`) — instead of two ~9-minute visits. The error grows
-unboundedly with the calendar gap, with no crash to signal it.
+Found by cycle 1's own adversary. Cycle 1 made `detect_stops` gap-aware, but
+`compute_insights` immediately post-processes its output:
 
-Two independent gap-blind implementations:
+```
+raw_stops = detect_stops(..., split_gap_s=opts.trip_split_gap_minutes * 60.0)
+stops = merge_nearby_stops(raw_stops, merge_radius_m=opts.merge_stops_within_m)
+```
 
-1. **`bhulan/analytics/stops.py::detect_stops`** grows a cluster on *spatial*
-   spread only (`_cluster_end`/`_cluster_radius_m` vs `radius_m`); it never
-   inspects the time gap between consecutive samples, so two temporally-distant
-   visits to the same spot merge into one stop.
-2. **`bhulan/analytics/hotspots.py`** (`_time_spent_s` / `_visit_count`) defines
-   a "visit" as a run of consecutive array indices in the same grid cell, with
-   no elapsed-time check — so two revisits with nothing recorded between them
-   become adjacent indices and read as one continuous dwell.
+`merge_nearby_stops` (`bhulan/analytics/stops.py`) merges any two consecutive
+stops whose centroids are within `merge_radius_m` **with no elapsed-time
+check** — recomputing duration as `combined_end - combined_start`, the entire
+calendar span again. Two stops at the *same* spot (distance 0) a week apart are
+folded into one ~10 000-minute stop. `merge_stops_within_m` is a real,
+documented `InsightsOptions` field for cleaning up GPS-jitter-split stops, so
+any caller who enables it silently loses cycle 1's gap-awareness — while
+`hotspots[].time_spent_min` in the *same response* stays correct, so the two
+fields disagree by three orders of magnitude about the same physical dwell.
 
-The fix already exists in the codebase to copy from: **`trips.py::_trip_bounds`
-splits on `trip_split_gap_seconds` between consecutive samples for exactly this
-reason.** Stops and hotspots must gain the same gap-awareness.
-
-(`tests/adversary/test_stop_and_hotspot_ignore_time_gaps.py` — 2 failing tests)
+(`tests/adversary/test_merge_nearby_stops_reintroduces_time_gap_bug.py`)
 
 ## 2. Hard constraints
 
 - **The named test is the acceptance test** — it already exists and is failing.
   Fix the product code to make it pass; do NOT weaken, rewrite, or delete it.
-- **Reuse the existing gap logic.** `trips.py` already splits on a configurable
-  gap. Introduce the same notion for stops/hotspots — a configurable
-  `stop_split_gap_seconds` (or reuse the existing gap setting if appropriate),
-  with a sensible default consistent with the rest of the analytics. Do NOT
-  invent a second, divergent gap mechanism.
-- **A stop/hotspot must not span a gap larger than the split threshold** — two
-  visits separated by more than the threshold are two stops / two visits, and
-  the reported duration is the sum of actual dwell times, never the elapsed
-  calendar time including the gap.
-- **Preserve every existing passing test** (unit + integration are the
-  regression gate) — including the prior stop-detection tests (the cycle-2
-  quadratic fix and the run-2 fixes must stay green). Normal continuous tracks
-  must be unaffected.
-- Backend/analytics only. No API-shape changes, no new dependencies, no DB or
-  schema changes. Do not touch `trips.py` (it is already correct) beyond reading
-  it for the pattern.
-- The KML-parsing quadratic (`test_kml_point_timestamp_quadratic_blowup.py`) is
-  **backlog for a later cycle** — leave it failing; it is not this cycle's job.
+- **Merge must respect the same gap.** `merge_nearby_stops` must NOT merge two
+  stops separated by a time gap ≥ the split threshold — a gap is a real-world
+  absence, exactly as cycle 1 established for `detect_stops`. Reuse the **same**
+  `split_gap_s` notion cycle 1 introduced (`stops.DEFAULT_SPLIT_GAP_S` /
+  `trip_split_gap`), threaded through — do NOT introduce a second divergent gap
+  concept, and do NOT hard-code a different constant.
+- **Merged duration must be the sum of the real dwells**, never the span
+  including the gap. If two stops are legitimately merged (close in space AND
+  time), the reported duration must reflect actual presence, not calendar time.
+- **Preserve every existing passing test** — cycle 1's gap-aware tests, the
+  jitter-merge behaviour `merge_nearby_stops` exists for (two stops close in
+  space AND time still merge correctly), and the unit+integration suites.
+- Backend/analytics only. Thread the gap through `compute_insights` →
+  `merge_nearby_stops` as needed; no API-shape changes, no new dependencies, no
+  DB/schema changes. Do not touch `trips.py`.
+- The KML-parsing quadratic (`test_kml_point_timestamp_quadratic_blowup.py`)
+  remains **backlog** for a later cycle — leave it failing.
 
 ## 3. Non-negotiable acceptance criteria
 
-- **AC1:** two visits to the same location separated by a long time gap (days,
-  weeks) produce **two** stops (and two hotspot visits), each with a duration
-  reflecting only the actual dwell — not one stop/visit spanning the gap.
-- **AC2:** `hotspots[].visit_count` and `time_spent_min` count real visits and
-  sum real dwell time, across a single track (`/v1/insights`) and across two
-  tracks (`/v1/compare` `shared_hotspots`).
-- **AC3:** a normal continuous track (no large gaps) yields exactly the same
-  stops/hotspots as before — no regression to the happy path.
-- **AC4:** the gap threshold is configurable and consistent with the existing
-  analytics settings; the split logic reuses `trips.py`'s approach, not a new one.
-- **AC5:** `poetry run pytest tests/unit/ tests/integration/ tests/adversary/test_stop_and_hotspot_ignore_time_gaps.py -q` is green (with a Mongo service for integration).
+- **AC1:** two stops at the same location separated by a large time gap are NOT
+  merged by `merge_nearby_stops`, even when `merge_stops_within_m` is set — they
+  remain two stops with gap-aware durations.
+- **AC2:** `stops[].duration_min` and `hotspots[].time_spent_min` in the same
+  `/v1/insights` response agree (within rounding) about the same physical dwell
+  — no three-orders-of-magnitude disagreement.
+- **AC3:** the legitimate use case still works — two stops close in BOTH space
+  and time (GPS jitter within the gap threshold) are still merged into one, with
+  a duration equal to the real combined dwell.
+- **AC4:** the gap threshold used by merge is the SAME one cycle 1 introduced;
+  no second/divergent constant.
+- **AC5:** `poetry run pytest tests/unit/ tests/integration/ tests/adversary/test_merge_nearby_stops_reintroduces_time_gap_bug.py tests/adversary/test_stop_and_hotspot_ignore_time_gaps.py -q` is green (with a Mongo service).
 
 ## 4. Known traps for the adversary to probe next
 
-- Off-by-one at the exact gap threshold (a gap == threshold: one stop or two?).
-- A gap that is exactly the sampling interval vs. a real absence.
-- Interaction with the stop-detection radius: a gap *and* spatial drift.
-- Whether `/v1/compare`'s pooling across tracks now double-counts or mis-merges.
-- The KML quadratic (backlog) and any other complexity blowups.
-- Other metamorphic properties: reordering, coordinate translation, unit changes.
+- Chained merges: three+ stops where A–B are close in time but B–C span a gap.
+- Whether `merge_nearby_stops` recomputes `radius_m`/`sample_count` correctly
+  after a legitimate merge (not just duration).
+- Any OTHER post-processing step that recomputes duration from start/end spans.
+- The `/v1/compare` `shared_hotspots` path once merge is gap-aware.
+- The KML quadratic (backlog) and other complexity/metamorphic properties.
 
 ## 5. Definition of done for this cycle
 
-- AC1–AC5 pass. Stops and hotspots are gap-aware, reusing `trips.py`'s pattern.
+- AC1–AC5 pass. `merge_nearby_stops` respects the same gap as `detect_stops`;
+  the two duration fields agree; jitter-merge still works.
 - ADR recorded in `spec/adrs/`.
 - A PR is opened for review. **No merge to `master` without your review.**
 
@@ -101,5 +97,8 @@ public demo — production stays gated behind your explicit approval.
 ---
 
 ## Change log
-- cycle 1 — cockpit — make stops/hotspots time-gap-aware (robustness run-4
-  metamorphic finding), reusing the gap logic trips.py already has.
+- cycle 1 — cockpit — make detect_stops/detect_hotspots time-gap-aware (reused
+  trips.py's split-on-gap pattern).
+- cycle 2 — cockpit — make merge_nearby_stops gap-aware too; it was re-merging
+  gap-split stops back across the absence, silently undoing cycle 1 whenever
+  merge_stops_within_m is set. Found by cycle 1's own adversary.
