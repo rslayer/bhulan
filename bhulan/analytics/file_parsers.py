@@ -132,13 +132,19 @@ def parse_kml_bytes(data: bytes) -> List[PointIn]:
             _extend_from_coord_string(points, coords_el.text, None)
 
     # 2) <Point><coordinates>lon,lat</coordinates></Point>
+    #
+    # Each Point takes the timestamp of its enclosing <Placemark>. Resolve
+    # them all up front in a single pass (Placemark -> timestamp, applied to
+    # every Point the Placemark contains) so each per-Point lookup below is
+    # O(1). A naive per-Point walk from the document root — as ElementTree has
+    # no parent pointers — is O(n^2) on the common "n dated waypoints, one
+    # Placemark each" export shape.
+    ts_by_point = _build_point_timestamps(root)
     for elem in _iter_elems(root, "Point"):
         coords_el = _find_child(elem, "coordinates")
         if coords_el is None or not coords_el.text:
             continue
-        # Look for a sibling <TimeStamp><when> or <TimeSpan><begin>.
-        parent = elem.getparent() if hasattr(elem, "getparent") else None
-        ts = _nearest_timestamp(root, elem) if parent is None else _nearest_timestamp(parent, elem)
+        ts = ts_by_point.get(id(elem))
         _extend_from_coord_string(points, coords_el.text, ts)
 
     # 3) <gx:Track>: interleaved <when>...</when> and <gx:coord>...</gx:coord>
@@ -221,34 +227,40 @@ def _find_child(parent: Element, local_name: str) -> Optional[Element]:
     return None
 
 
-def _nearest_timestamp(
-    root: Element, target: Element
-) -> Optional[datetime]:
-    """Return the timestamp inside the Placemark containing ``target``, if any.
+def _build_point_timestamps(root: Element) -> dict:
+    """Map every ``<Point>`` element (by ``id``) to its Placemark's timestamp.
 
-    Walks up to the enclosing ``<Placemark>`` and scans for a
-    ``<TimeStamp><when>`` or ``<TimeSpan><begin>`` child. Returns ``None``
-    when the shape doesn't have a timestamp — the downstream analytics
-    handle undated points gracefully.
+    Single pass over the document: for each ``<Placemark>`` we read its
+    ``<TimeStamp><when>`` / ``<TimeSpan><begin>`` once and apply it to every
+    ``<Point>`` the Placemark contains. Resolving a Point's timestamp then
+    costs O(1) instead of an O(n) walk from the root per Point, so the whole
+    ``<Placemark><TimeStamp>+<Point>`` shape is O(n) rather than O(n^2).
+
+    ElementTree has no parent pointers, but iterating Placemarks once and
+    reading each one's own Points + timestamp together needs none. When a
+    Point is (pathologically) nested in more than one Placemark, the first in
+    document order wins — matching the previous per-Point root walk, which
+    returned the first enclosing Placemark's timestamp.
     """
-    # ElementTree doesn't expose parent pointers, so we walk the tree looking
-    # for a Placemark that contains `target`. That's O(n) but these docs are
-    # small (dozens to hundreds of placemarks in practice).
+    ts_by_point: dict = {}
     for pm in _iter_elems(root, "Placemark"):
-        if _contains(pm, target):
-            for when in _iter_elems(pm, "when"):
-                return _parse_ts(when.text) if when.text else None
-            for begin in _iter_elems(pm, "begin"):
-                return _parse_ts(begin.text) if begin.text else None
-            return None
+        ts = _placemark_timestamp(pm)
+        for point in _iter_elems(pm, "Point"):
+            ts_by_point.setdefault(id(point), ts)
+    return ts_by_point
+
+
+def _placemark_timestamp(pm: Element) -> Optional[datetime]:
+    """Return the ``<TimeStamp><when>`` or ``<TimeSpan><begin>`` inside ``pm``.
+
+    Returns ``None`` when the Placemark has no timestamp — the downstream
+    analytics handle undated points gracefully.
+    """
+    for when in _iter_elems(pm, "when"):
+        return _parse_ts(when.text) if when.text else None
+    for begin in _iter_elems(pm, "begin"):
+        return _parse_ts(begin.text) if begin.text else None
     return None
-
-
-def _contains(ancestor: Element, descendant: Element) -> bool:
-    for e in ancestor.iter():
-        if e is descendant:
-            return True
-    return False
 
 
 def parse_fit_bytes(data: bytes) -> List[PointIn]:
