@@ -27,6 +27,70 @@ class ParseError(ValueError):
     """Raised when the input cannot be parsed as coordinates."""
 
 
+# Maximum bracket/brace nesting depth accepted from untrusted text before we
+# even hand it to ``json.loads``. A real GPS/track document (a GeoJSON
+# ``FeatureCollection`` of ``LineString`` features, or a flat array of point
+# dicts) nests only a handful of levels deep; 200 is orders of magnitude beyond
+# anything legitimate yet comfortably below CPython's ~1000 recursion limit and
+# the C json decoder's own ceiling. A tiny ``[[[…1…]]]`` payload (O(depth)
+# bytes) would otherwise make ``json.loads`` raise an uncaught ``RecursionError``
+# that surfaces as an HTTP 500. See spec/adrs/0010-depth-guarded-untrusted-json.md.
+MAX_JSON_NESTING_DEPTH = 200
+
+
+def _max_json_nesting_depth(text: str) -> int:
+    """Return the deepest ``[``/``{`` nesting in ``text`` (ignoring strings).
+
+    A single linear O(len) scan of the raw characters that tracks string
+    state so brackets appearing *inside* JSON string literals are not
+    counted. This runs before ``json.loads`` so a pathologically deep
+    payload is rejected without ever driving the decoder's recursion.
+    """
+    depth = 0
+    max_depth = 0
+    in_string = False
+    escaped = False
+    for ch in text:
+        if in_string:
+            if escaped:
+                escaped = False
+            elif ch == "\\":
+                escaped = True
+            elif ch == '"':
+                in_string = False
+            continue
+        if ch == '"':
+            in_string = True
+        elif ch == "[" or ch == "{":
+            depth += 1
+            if depth > max_depth:
+                max_depth = depth
+        elif ch == "]" or ch == "}":
+            if depth > 0:
+                depth -= 1
+    return max_depth
+
+
+def _loads_untrusted(text: str, max_depth: int = MAX_JSON_NESTING_DEPTH) -> Any:
+    """``json.loads`` for untrusted text, guarded against deep-nesting crashes.
+
+    Pre-scans the raw text's maximum bracket/brace nesting depth and rejects
+    anything past ``max_depth`` with a :class:`ParseError` (a ``ValueError``
+    the API layer maps to a clean 4xx) *before* calling ``json.loads`` — a
+    deeply-nested payload would otherwise make the decoder raise an uncaught
+    ``RecursionError`` (HTTP 500). ``RecursionError`` is also caught as a
+    belt-and-braces fallback and converted to the same clean error.
+    """
+    if _max_json_nesting_depth(text) > max_depth:
+        raise ParseError(
+            f"Input JSON is nested too deeply (limit is {max_depth} levels)."
+        )
+    try:
+        return json.loads(text)
+    except RecursionError as exc:  # pragma: no cover - guarded by the pre-scan
+        raise ParseError("Input JSON is nested too deeply to parse.") from exc
+
+
 _LAT_KEYS = {"lat", "latitude", "y"}
 _LON_KEYS = {"lon", "lng", "long", "longitude", "x"}
 _TS_KEYS = {"ts", "ts_utc", "timestamp", "time", "datetime"}
@@ -235,7 +299,7 @@ def _coords_from_geojson_geom(
 def parse_geojson(data: Any) -> List[PointIn]:
     """Parse a GeoJSON object (``FeatureCollection``, ``Feature``, or geometry)."""
     if isinstance(data, str):
-        data = json.loads(data)
+        data = _loads_untrusted(data)
 
     points: List[PointIn] = []
 
@@ -270,7 +334,7 @@ def parse_geojson(data: Any) -> List[PointIn]:
 def parse_json(data: Any) -> List[PointIn]:
     """Parse JSON that is either a GeoJSON object or an array of point dicts."""
     if isinstance(data, str):
-        data = json.loads(data)
+        data = _loads_untrusted(data)
 
     if isinstance(data, dict) and data.get("type") in {
         "FeatureCollection",
@@ -349,7 +413,7 @@ def estimate_input_rows(text: str) -> Optional[int]:
         return None
     if stripped.startswith("["):
         try:
-            data = json.loads(text)
+            data = _loads_untrusted(text)
         except (json.JSONDecodeError, ValueError):
             return None
         if isinstance(data, list):
