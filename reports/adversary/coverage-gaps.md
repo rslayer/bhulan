@@ -1,6 +1,6 @@
 # Adversary coverage gaps
 
-Product code reached by the adversary suite: **52.5%**
+Product code reached by the adversary suite: **53.1%**
 
 Lines below have NEVER been executed by any adversary test — undiscovered defects live here. Targeting aid, not a KPI.
 
@@ -8,7 +8,7 @@ Lines below have NEVER been executed by any adversary test — undiscovered defe
 |---|---|---|
 | `bhulan/analytics/parsers.py` | 132 (`38,41-42,49,51-55,59,63-65,67-71,87,89,92-93,101,105,115,117,119,133-134,139,152-165,170-1`) | 45% |
 | `bhulan/ingestion/files.py` | 107 (`7-11,13,15-19,22,24,27,40-41,43,53-54,56,59,70-72,75,85-87,89-91,93-97,100,111,113-116,119`) | 0% |
-| `bhulan/analytics/file_parsers.py` | 103 (`48-49,53-56,58,60-63,65-66,70,74,77,81,91-92,94-96,123-124,130-132,138,146-164,181,185-186`) | 40% |
+| `bhulan/analytics/file_parsers.py` | 105 (`48-49,53-56,58,60-63,65-66,70,74,77,81,91-92,94-96,123-124,130-132,147,150,160-178,195,199`) | 42% |
 | `bhulan/analytics/geocoding.py` | 91 (`22,24-27,29,35,37-39,41-43,46-49,52,60-63,65-66,68,70-76,78-79,81-83,89,92,95,98,105,111-1`) | 0% |
 | `bhulan/auth/service.py` | 88 (`44,57-58,64,90-95,100,111-114,119-124,127,133-134,138-139,143,145,152-154,160,166-171,178-`) | 32% |
 | `bhulan/api/app.py` | 87 (`49,130-131,136-137,156,162,182-183,189-190,199-200,209-216,218-229,231,246-250,260,291-292`) | 49% |
