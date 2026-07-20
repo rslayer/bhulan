@@ -77,18 +77,28 @@ def bounding_box(
     raw_max = float(np.max(lons_a))
     raw_span = raw_max - raw_min
 
-    # Longitudes shifted into [0, 360): if the points really cluster near ±180°,
-    # this makes them contiguous and yields a much smaller span than the raw
-    # min/max (which would imply a near-global box). Only prefer the shifted box
-    # when it is strictly tighter, so tracks that do not straddle ±180° keep the
-    # exact naive min/max (byte-identical to before).
-    shifted = np.where(lons_a < 0.0, lons_a + 360.0, lons_a)
-    shifted_min = float(np.min(shifted))
-    shifted_max = float(np.max(shifted))
-    if shifted_max - shifted_min < raw_span:
-        # Crosses the antimeridian: fold the [0, 360) edges back to (-180, 180].
-        min_lon = ((shifted_min + 180.0) % 360.0) - 180.0
-        max_lon = ((shifted_max + 180.0) % 360.0) - 180.0
+    # Only a track whose raw longitude span exceeds 180° can possibly be tighter
+    # when measured the other way around the globe, so a straddle is only even
+    # considered past that gate. This mirrors ``latlon_to_xy_m``'s straddle test
+    # (``raw_max - raw_min > 180``) exactly, which matters for byte-identity: for
+    # a same-sign track the ``+360`` shift below reintroduces ~1e-13° of float
+    # noise, and comparing the noisy shifted span against the raw span would
+    # occasionally (and pointlessly) pick the shifted box for a track that never
+    # goes near ±180°. Gating on the raw span keeps every non-straddling track on
+    # the exact naive min/max (byte-identical to before).
+    if raw_span > 180.0:
+        # Longitudes shifted into [0, 360) so points clustered near ±180° become
+        # contiguous; prefer the shifted box only when it is strictly tighter.
+        shifted = np.where(lons_a < 0.0, lons_a + 360.0, lons_a)
+        shifted_min = float(np.min(shifted))
+        shifted_max = float(np.max(shifted))
+        if shifted_max - shifted_min < raw_span:
+            # Crosses the antimeridian: fold the [0, 360) edges back to (-180, 180].
+            min_lon = ((shifted_min + 180.0) % 360.0) - 180.0
+            max_lon = ((shifted_max + 180.0) % 360.0) - 180.0
+        else:
+            min_lon = raw_min
+            max_lon = raw_max
     else:
         min_lon = raw_min
         max_lon = raw_max
