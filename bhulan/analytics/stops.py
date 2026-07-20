@@ -217,19 +217,26 @@ def merge_nearby_stops(
     from bhulan.analytics.geodesy import haversine_m
 
     merged: List[Stop] = []
+    # The member stops accumulated into each emitted blob, parallel to
+    # ``merged``. The merged geometry (centroid + ``radius_m``) is computed
+    # from these *real* members when the blob is emitted, not by repeated
+    # pairwise midpoint — for a 3+ chain the midpoint drifts toward the tail
+    # (can land outside ``merge_radius_m`` of an early member) and its
+    # last-hop radius understates the true spread. See ADR 0008.
+    groups: List[List[Stop]] = []
     # The stop that immediately preceded ``s`` in the *original* input, kept
     # separate from the accumulating blob ``merged[-1]``. The spatial and
     # time-gap merge decisions are made against this original neighbour, not
     # the blob's drifted centroid, so a chain of consecutive pairwise-close
     # stops collapses fully (single-linkage over consecutive stops). See ADR
-    # 0007.
+    # 0007. This cycle changes ONLY the emitted geometry, never the decision.
     prev_original: Optional[Stop] = None
     for s in stops:
         if not merged:
             merged.append(s)
+            groups.append([s])
             prev_original = s
             continue
-        blob = merged[-1]
 
         # Decide against the immediately preceding *original* stop. Its
         # ``end_ts`` equals the blob's ``end_ts`` (the blob always ends at its
@@ -247,28 +254,51 @@ def merge_nearby_stops(
         close_in_time = gap_s < split_gap_s
 
         if close_in_space and close_in_time:
-            lat = (blob.lat + s.lat) / 2.0
-            lon = circular_mean_lon([blob.lon, s.lon])
-            merged[-1] = Stop(
-                lat=lat,
-                lon=lon,
-                start_ts=blob.start_ts,
-                end_ts=s.end_ts,
-                # Sum of the real dwells, not the calendar span: even a small
-                # inter-stop gap is travel, not presence.
-                duration_s=blob.duration_s + s.duration_s,
-                # Recentring to the midpoint moves every original sample ~half
-                # the centroid separation further from the new centre, so the
-                # merged spread is that displacement plus each cluster's own
-                # radius. ``max(prev, s)`` alone reported the spread around the
-                # *discarded* centroids — e.g. two tight clusters 40m apart
-                # merged to a claimed ~0m radius while truly spanning ~20m.
-                radius_m=centroid_dist_m / 2.0 + max(blob.radius_m, s.radius_m),
-                start_index=blob.start_index,
-                end_index=s.end_index,
-                sample_count=blob.sample_count + s.sample_count,
-            )
+            groups[-1].append(s)
+            merged[-1] = _merge_members(groups[-1])
         else:
             merged.append(s)
+            groups.append([s])
         prev_original = s
     return merged
+
+
+def _merge_members(members: List[Stop]) -> Stop:
+    """Emit one merged :class:`Stop` from the ordered member stops of a blob.
+
+    The centroid and ``radius_m`` are computed from the *real* members, not by
+    repeated pairwise midpoint, so a chain of 3+ stops reports a truthful
+    location and spread (ADR 0008):
+
+    - ``lat`` = the ``sample_count``-weighted mean of the member centroid lats.
+    - ``lon`` = the (wraparound-aware) circular mean of the member centroid
+      lons, so a chain straddling ±180° still centres inside the cluster.
+    - ``radius_m`` = the true enclosing radius: the ``max`` over members of
+      ``haversine_m(centroid, member) + member.radius_m``. This bounds the
+      distance from the reported centroid to every member's own samples.
+
+    For a two-member group of equal ``sample_count`` this reduces to the prior
+    pairwise formula (midpoint centroid, ``dist/2 + max(radii)`` radius), so
+    the single-merge path is unchanged.
+    """
+    from bhulan.analytics.geodesy import haversine_m
+
+    total_w = sum(m.sample_count for m in members)
+    lat = sum(m.lat * m.sample_count for m in members) / total_w
+    lon = circular_mean_lon([m.lon for m in members])
+    radius_m = max(
+        haversine_m(lat, lon, m.lat, m.lon) + m.radius_m for m in members
+    )
+    return Stop(
+        lat=lat,
+        lon=lon,
+        start_ts=members[0].start_ts,
+        end_ts=members[-1].end_ts,
+        # Sum of the real dwells, not the calendar span: even a small
+        # inter-stop gap is travel, not presence.
+        duration_s=sum(m.duration_s for m in members),
+        radius_m=radius_m,
+        start_index=members[0].start_index,
+        end_index=members[-1].end_index,
+        sample_count=total_w,
+    )
