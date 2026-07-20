@@ -29,7 +29,7 @@ from typing import Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 
-from bhulan.analytics.geodesy import latlon_to_xy_m
+from bhulan.analytics.geodesy import circular_mean_lon, latlon_to_xy_m
 from bhulan.analytics.mobility import TrackSample
 
 DEFAULT_HOTSPOT_GRID_M = 100.0
@@ -217,7 +217,7 @@ def detect_hotspots(
         idxs.sort()
 
         centroid_lat = float(np.mean([lats[i] for i in idxs]))
-        centroid_lon = float(np.mean([lons[i] for i in idxs]))
+        centroid_lon = circular_mean_lon([lons[i] for i in idxs])
 
         ts_samples = [points[i].ts_utc for i in idxs if points[i].ts_utc is not None]
         first_ts = min(ts_samples) if ts_samples else None  # type: ignore[type-var]

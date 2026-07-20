@@ -23,7 +23,7 @@ from typing import List, Optional, Sequence
 
 import numpy as np
 
-from bhulan.analytics.geodesy import latlon_to_xy_m
+from bhulan.analytics.geodesy import circular_mean_lon, latlon_to_xy_m
 from bhulan.analytics.mobility import TrackSample
 
 DEFAULT_RADIUS_M = 50.0
@@ -163,7 +163,7 @@ def detect_stops(
                 xs_c = xs[i : end + 1]
                 ys_c = ys[i : end + 1]
                 lat_c = float(np.mean([p.lat for p in ts_points[i : end + 1]]))
-                lon_c = float(np.mean([p.lon for p in ts_points[i : end + 1]]))
+                lon_c = circular_mean_lon([p.lon for p in ts_points[i : end + 1]])
                 stops.append(
                     Stop(
                         lat=lat_c,
@@ -234,7 +234,7 @@ def merge_nearby_stops(
 
         if close_in_space and close_in_time:
             lat = (prev.lat + s.lat) / 2.0
-            lon = (prev.lon + s.lon) / 2.0
+            lon = circular_mean_lon([prev.lon, s.lon])
             merged[-1] = Stop(
                 lat=lat,
                 lon=lon,
