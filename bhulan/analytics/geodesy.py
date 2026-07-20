@@ -53,17 +53,47 @@ def haversine_vec_m(lats: Sequence[float], lons: Sequence[float]) -> np.ndarray:
 def bounding_box(
     lats: Sequence[float], lons: Sequence[float]
 ) -> Tuple[float, float, float, float]:
-    """Return ``(min_lat, min_lon, max_lat, max_lon)`` for the given points."""
+    """Return ``(min_lat, min_lon, max_lat, max_lon)`` for the given points.
+
+    The box is the *minimal-longitude-span* box. For the common case (points
+    within a <180° longitude window) this is the naive ``min/max`` and
+    ``min_lon <= max_lon`` as usual. When the points straddle the antimeridian
+    (±180°) — e.g. GPS jitter around Fiji or the Aleutians — the minimal box
+    crosses ±180° and is reported with ``min_lon > max_lon``: the box runs east
+    from ``min_lon``, over +180° / −180°, to ``max_lon`` (the "short way
+    round"). A consumer must treat ``min_lon > max_lon`` as an
+    antimeridian-crossing box rather than an empty/inverted one. See
+    ``spec/adrs/0004-antimeridian-projection-and-bbox.md``.
+    """
     if not lats or not lons:
         raise ValueError("bounding_box requires at least one point")
     lats_a = np.asarray(lats, dtype=np.float64)
     lons_a = np.asarray(lons, dtype=np.float64)
-    return (
-        float(np.min(lats_a)),
-        float(np.min(lons_a)),
-        float(np.max(lats_a)),
-        float(np.max(lons_a)),
-    )
+
+    min_lat = float(np.min(lats_a))
+    max_lat = float(np.max(lats_a))
+
+    raw_min = float(np.min(lons_a))
+    raw_max = float(np.max(lons_a))
+    raw_span = raw_max - raw_min
+
+    # Longitudes shifted into [0, 360): if the points really cluster near ±180°,
+    # this makes them contiguous and yields a much smaller span than the raw
+    # min/max (which would imply a near-global box). Only prefer the shifted box
+    # when it is strictly tighter, so tracks that do not straddle ±180° keep the
+    # exact naive min/max (byte-identical to before).
+    shifted = np.where(lons_a < 0.0, lons_a + 360.0, lons_a)
+    shifted_min = float(np.min(shifted))
+    shifted_max = float(np.max(shifted))
+    if shifted_max - shifted_min < raw_span:
+        # Crosses the antimeridian: fold the [0, 360) edges back to (-180, 180].
+        min_lon = ((shifted_min + 180.0) % 360.0) - 180.0
+        max_lon = ((shifted_max + 180.0) % 360.0) - 180.0
+    else:
+        min_lon = raw_min
+        max_lon = raw_max
+
+    return (min_lat, min_lon, max_lat, max_lon)
 
 
 def latlon_to_xy_m(
@@ -81,11 +111,34 @@ def latlon_to_xy_m(
         return np.array([], dtype=np.float64), np.array([], dtype=np.float64)
 
     lat0 = float(np.mean(lats_a))
-    lon0 = float(np.mean(lons_a))
+
+    # Reference longitude. For tracks that straddle the antimeridian (±180°) the
+    # arithmetic mean of the raw longitudes lands on the *antipode* (e.g. the
+    # mean of 179.99 and -179.99 is 0), which would leave every point ~180° from
+    # the reference. Detect the straddle (raw span > 180°) and take the mean over
+    # longitudes shifted into [0, 360) so the reference sits inside the real
+    # cluster. Tracks that do not straddle keep the plain mean, so their
+    # projection is byte-identical to before.
+    raw_min = float(np.min(lons_a))
+    raw_max = float(np.max(lons_a))
     cos_lat0 = math.cos(math.radians(lat0))
     meters_per_deg_lat = 111_320.0
     meters_per_deg_lon = 111_320.0 * cos_lat0
 
+    if raw_max - raw_min > 180.0:
+        shifted = np.where(lons_a < 0.0, lons_a + 360.0, lons_a)
+        lon0 = float(np.mean(shifted))
+        # Normalise the signed longitude difference to (-180, 180] before
+        # scaling to metres, so a point on the far side of ±180° from ``lon0``
+        # uses the short way round (~metres) instead of the long way
+        # (~40 000 km).
+        dlon = ((lons_a - lon0 + 180.0) % 360.0) - 180.0
+    else:
+        # No antimeridian straddle: the modulo is a mathematical no-op here, so
+        # skip it and keep the projection byte-identical to prior releases.
+        lon0 = float(np.mean(lons_a))
+        dlon = lons_a - lon0
+
     y = (lats_a - lat0) * meters_per_deg_lat
-    x = (lons_a - lon0) * meters_per_deg_lon
+    x = dlon * meters_per_deg_lon
     return x, y
