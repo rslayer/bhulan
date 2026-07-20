@@ -1,0 +1,412 @@
+# .github/workflows/loop.yml
+#
+# Autonomous SDLC loop for bhulan, on a REAL codebase.
+#
+#   spec/spec.md ─► BUILD ─► EVAL (regression + acceptance gate)
+#        ─► COVERAGE MAP ─► ADVERSARIAL ─► ROBUSTNESS   (find, aggressively)
+#        ─► REFUTE (kill false positives) ─► TRIAGE (rank only) ─► PR
+#
+# Finding is separated from judging on purpose: a finder that worries about
+# severity finds less, so the attack stages are aggressive and deliberately
+# dumb about importance. Triage ranks; YOU decide what gets fixed. Attacks are
+# coverage-guided — reports/adversary/coverage-gaps.md lists product code no
+# adversary test has reached, which is where the unknown bugs are.
+#
+# The loop PROPOSES; you DISPOSE. It only ever works on a `loop/cycle-N` branch
+# and opens a PR — it never merges to `master`, never deploys. bhulan is a
+# public demo; keep it PR-gated.
+#
+# Safety model:
+#   - BUILD may edit product code under `bhulan/` (that is its job).
+#   - After BUILD, product source is snapshotted; ADVERSARIAL/ROBUSTNESS/REFUTE/
+#     TRIAGE are READ-ONLY on product code and may only ADD/DELETE tests — a
+#     guard step fails the run if any `bhulan/` file changes.
+#   - EVAL runs the existing unit+integration suite as a hard regression gate.
+#
+# Trigger: workflow_dispatch ONLY. Needs the CLAUDE_CODE_OAUTH_TOKEN secret.
+
+name: sdlc-loop
+
+on:
+  workflow_dispatch:
+    inputs:
+      focus:
+        description: "Optional note to steer this cycle"
+        required: false
+        default: ""
+
+concurrency:
+  group: sdlc-loop-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+  id-token: write
+
+jobs:
+  loop:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    # Integration tests hit a real MongoDB (see tests/conftest.py); mirror ci.yml.
+    services:
+      mongo:
+        image: mongo:7
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.adminCommand({ping:1})'"
+          --health-interval 10s --health-timeout 5s --health-retries 5
+    env:
+      PYTHONPATH: .
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Poetry
+        run: pipx install poetry==1.8.3
+
+      - name: Install dependencies
+        run: poetry install --no-root
+
+      - name: Set cycle number
+        id: cyc
+        run: echo "n=${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+
+      # ---------------------------------------------------------------------
+      # BUILD — implement the spec in the real code under bhulan/
+      # ---------------------------------------------------------------------
+      - name: Build agent
+        continue-on-error: true
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: |
+            Read spec/spec.md. Implement THIS CYCLE'S outcome and satisfy every
+            acceptance criterion in the real code under `bhulan/`. The spec names
+            acceptance tests that already exist under `tests/adversary/` and are
+            currently FAILING — make them pass by fixing the product code; do NOT
+            write them and do NOT weaken them.
+
+            HARD RULES:
+            - Stay within the spec's constraints. Do NOT change code the spec
+              puts out of scope.
+            - Do NOT weaken, skip, or delete any existing PASSING test — the
+              unit + integration suites are the regression gate.
+            - Follow existing patterns; tests use `fastapi.testclient.TestClient`
+              over `bhulan.api.app:app` (public /v1 surface needs no MongoDB).
+            - Record any material design choice as a new file in `spec/adrs/`.
+            ${{ inputs.focus && format('Cycle note: {0}', inputs.focus) || '' }}
+          claude_args: '--model opus --max-turns 45 --allowedTools "Read,Grep,Glob,Edit,Write,MultiEdit,Bash"'
+
+      # ---------------------------------------------------------------------
+      # EVAL — the referee. Existing unit+integration suite = regression gate.
+      # (tests/adversary/ holds the intentionally-failing acceptance/backlog
+      # tests; they are scored separately, not part of the regression gate.)
+      # ---------------------------------------------------------------------
+      - name: Eval (regression + acceptance)
+        id: eval
+        env:
+          BHULAN_REQUIRE_MONGO: "1"
+        run: |
+          set +e
+          OUT="$(poetry run pytest tests/unit/ tests/integration/ --no-cov -q -p no:cacheprovider --tb=short 2>&1)"
+          RC=$?
+          echo "$OUT" | tail -40
+          PASSED="$(printf '%s' "$OUT" | grep -oE '[0-9]+ passed' | grep -oE '[0-9]+' | head -1)"
+          FAILED="$(printf '%s' "$OUT" | grep -oE '[0-9]+ failed' | grep -oE '[0-9]+' | head -1)"
+          echo "passed=${PASSED:-0}" >> "$GITHUB_OUTPUT"
+          echo "failed=${FAILED:-0}" >> "$GITHUB_OUTPUT"
+          echo "rc=$RC" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      # Snapshot product source so the attack stages can't silently edit it.
+      - name: Snapshot product source
+        run: |
+          find bhulan -name '*.py' -not -path '*/__pycache__/*' \
+            | sort | xargs sha256sum > /tmp/product.sha
+          echo "snapshotted $(wc -l < /tmp/product.sha) product files"
+
+      # ---------------------------------------------------------------------
+      # COVERAGE MAP — which product code has NO adversary test ever reached?
+      # A targeting aid for the attack stages, not a KPI.
+      # ---------------------------------------------------------------------
+      - name: Adversary coverage map
+        id: covmap
+        run: |
+          set +e
+          poetry run pytest tests/adversary/ -q -p no:cacheprovider \
+            --cov=bhulan --cov-report=json:/tmp/cov.json >/dev/null 2>&1
+          poetry run python - <<'PY'
+          import json, os
+          try:
+              d = json.load(open('/tmp/cov.json'))
+          except Exception:
+              d = {"files": {}}
+          rows = []
+          for path, info in sorted(d.get("files", {}).items()):
+              p = path.replace("\\", "/")
+              if "/tests/" in p or p.startswith("tests/") or "__pycache__" in p:
+                  continue
+              missing = info.get("missing_lines") or []
+              covered = (info.get("summary") or {}).get("percent_covered", 0.0)
+              if missing:
+                  rows.append((len(missing), p, covered, missing))
+          rows.sort(reverse=True)
+          total = sum((f.get("summary") or {}).get("num_statements", 0)
+                      for k, f in d.get("files", {}).items()
+                      if "/tests/" not in k and not k.startswith("tests/"))
+          hit = sum((f.get("summary") or {}).get("covered_lines", 0)
+                    for k, f in d.get("files", {}).items()
+                    if "/tests/" not in k and not k.startswith("tests/"))
+          pct = round(100.0 * hit / total, 1) if total else 0.0
+          def ranges(ns):
+              out, s, prev = [], None, None
+              for n in ns:
+                  if s is None: s = prev = n; continue
+                  if n == prev + 1: prev = n; continue
+                  out.append(f"{s}-{prev}" if s != prev else f"{s}"); s = prev = n
+              if s is not None: out.append(f"{s}-{prev}" if s != prev else f"{s}")
+              return ",".join(out)
+          os.makedirs("reports/adversary", exist_ok=True)
+          with open("reports/adversary/coverage-gaps.md", "w") as fh:
+              fh.write("# Adversary coverage gaps\n\n")
+              fh.write(f"Product code reached by the adversary suite: **{pct}%**\n\n")
+              fh.write("Lines below have NEVER been executed by any adversary test — "
+                       "undiscovered defects live here. Targeting aid, not a KPI.\n\n")
+              fh.write("| product file | unprobed lines | reached |\n|---|---|---|\n")
+              for cnt, p, cov, missing in rows[:25]:
+                  fh.write(f"| `{p}` | {cnt} (`{ranges(missing)[:90]}`) | {cov:.0f}% |\n")
+          print(f"adversary reach: {pct}%  |  files with gaps: {len(rows)}")
+          open('/tmp/pct', 'w').write(str(pct))
+          PY
+          echo "pct=$(cat /tmp/pct 2>/dev/null || echo 0)" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      # ---------------------------------------------------------------------
+      # ADVERSARIAL — a DIFFERENT model attacks the new feature (read-only).
+      # ---------------------------------------------------------------------
+      - name: Adversary agent
+        continue-on-error: true
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: |
+            Read spec/spec.md. You are a DIFFERENT model from the builder. Treat
+            all product code under `bhulan/` as READ-ONLY (READ it, but do NOT
+            modify/add/delete any non-test file). Attack THIS CYCLE'S feature:
+            probe the spec's "known traps" first, then edge inputs around the fix.
+
+            bhulan is a stateless GPS-analytics API. Attack the public /v1
+            surface (POST /v1/insights, /v1/plot/validate, /v1/compare,
+            /v1/parse/file, GET /v1/healthz) with the in-process
+            `TestClient(app)` pattern from tests/adversary/conftest.py — no
+            MongoDB needed. This is a data-processing library: the richest bugs
+            are METAMORPHIC (same track → same/predictably-transformed answer
+            under reorder/duplicate/translate/unit-change), ALGORITHMIC
+            COMPLEXITY (n→8n growth), and silently-wrong numeric answers — not
+            crashes. Do NOT re-walk already-fixed NaN/overflow/type-coercion.
+
+            For every genuine defect, write a REPRODUCING failing pytest test
+            under `tests/adversary/`. A FAILING test is the deliverable. Do NOT
+            weaken existing tests. Summarize in
+            `reports/adversary/cycle-${{ steps.cyc.outputs.n }}.md`.
+
+            COVERAGE-GUIDED TARGETING: read `reports/adversary/coverage-gaps.md`
+            and spend remaining turns on the unprobed branches.
+
+            Report findings only. Do NOT rank or self-censor on severity — a
+            separate triage stage ranks. A finding you skip because it "seems
+            minor" is a finding lost.
+          claude_args: '--model sonnet --max-turns 30 --allowedTools "Read,Grep,Glob,Write,Bash"'
+
+      # ---------------------------------------------------------------------
+      # ROBUSTNESS — broader sweep of the /v1 surface (read-only).
+      # ---------------------------------------------------------------------
+      - name: Robustness agent
+        continue-on-error: true
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: |
+            Robustness sweep of the public /v1 surface (read bhulan/api/ for the
+            routes). Treat `bhulan/` product code as READ-ONLY; only WRITE new
+            tests under `tests/adversary/` and append to
+            `reports/adversary/cycle-${{ steps.cyc.outputs.n }}.md`. Use the
+            in-process `TestClient(app)` pattern from tests/adversary/conftest.py.
+            Probe: malformed/huge/truncated GPX/KML/FIT on /v1/parse/file, huge
+            coordinate lists (complexity), degenerate tracks (single point,
+            duplicates, all-identical timestamps), and metamorphic properties.
+            Write a REPRODUCING failing test for each genuine defect. Do NOT
+            modify anything under bhulan/.
+
+            COVERAGE-GUIDED TARGETING: read `reports/adversary/coverage-gaps.md`
+            and aim at unprobed branches first.
+
+            Find aggressively; do NOT rank or self-censor on severity. A finding
+            you skip because it "seems minor" is a finding lost.
+          claude_args: '--model sonnet --max-turns 30 --allowedTools "Read,Grep,Glob,Write,Bash"'
+
+      # ---------------------------------------------------------------------
+      # REFUTE — an independent skeptic kills clear false positives.
+      # ---------------------------------------------------------------------
+      - name: Refuter agent
+        continue-on-error: true
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: |
+            You are the REFUTER — an independent skeptic. The adversary stages
+            wrote failing tests under `tests/adversary/`, each claiming a defect.
+            KILL the false positives.
+
+            Run `poetry run pytest tests/adversary/ -q` to see what fails. For
+            each FAILING test, read it, the product code it targets, and
+            spec/spec.md, then judge: is this a REAL defect, or is the test's
+            asserted behaviour simply wrong (contradicts spec intent, asserts a
+            preference not a fault, physically unreachable, or a broken
+            fixture/assert)?
+
+            CALIBRATION — a human decides what gets fixed, so noise is cheap and
+            a wrongly-killed real bug is expensive. When in doubt, KEEP IT. Do
+            not refute merely because a defect seems minor — severity is triage's
+            job.
+
+            For each finding you refute: DELETE that test (or case) from
+            `tests/adversary/` and record it in
+            `reports/adversary/refuted-${{ steps.cyc.outputs.n }}.md` with the
+            test name and a concrete justification. Everything you keep, leave
+            untouched. Product code under `bhulan/` is STRICTLY READ-ONLY.
+          claude_args: '--model sonnet --max-turns 45 --allowedTools "Read,Grep,Glob,Write,Edit,Bash"'
+
+      # ---------------------------------------------------------------------
+      # TRIAGE — rank the survivors. Ranks ONLY; never decides, never fixes.
+      # ---------------------------------------------------------------------
+      - name: Triage agent
+        continue-on-error: true
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: |
+            You are TRIAGE. Rank the surviving findings so a human can decide
+            what to fix. Run `poetry run pytest tests/adversary/ -q` — every
+            FAILING test is one finding.
+
+            For each finding assess: severity (critical/high/medium/low);
+            exploitability (can an unauthenticated caller of the public /v1
+            surface trigger it? trivial vs contrived input); blast radius
+            (availability/DoS, correctness/silently-wrong-answer, data loss,
+            cosmetic); and one concrete sentence on why it matters.
+
+            Write `reports/adversary/triage-${{ steps.cyc.outputs.n }}.md`: a
+            markdown table ranked MOST SEVERE FIRST with columns
+            `rank | severity | finding (test file::test) | unauth? | blast radius | why it matters`,
+            then a short paragraph per critical/high with the concrete failure
+            scenario.
+
+            Rank ONLY. Do NOT fix anything, edit product code, or modify/delete
+            tests. Product code under `bhulan/` is STRICTLY READ-ONLY.
+          claude_args: '--model sonnet --max-turns 45 --allowedTools "Read,Grep,Glob,Write,Bash"'
+
+      # ---------------------------------------------------------------------
+      # GUARD — the attack stages must not have touched product code.
+      # ---------------------------------------------------------------------
+      - name: Assert product code untouched by attack stages
+        run: |
+          if ! sha256sum -c /tmp/product.sha --quiet; then
+            echo "::error ::An attack stage (adversary/robustness/refuter/triage) modified product code under bhulan/. Aborting — only BUILD may edit product."
+            exit 1
+          fi
+          echo "OK: product source unchanged since the build."
+
+      # Count adversary/robustness defects (failing tests they added).
+      - name: Score attack findings
+        id: attack
+        run: |
+          set +e
+          mkdir -p tests/adversary
+          [ -f tests/adversary/__init__.py ] || touch tests/adversary/__init__.py
+          OUT="$(poetry run pytest tests/adversary/ -q -p no:cacheprovider \
+            --cov=bhulan --cov-report=json:/tmp/cov2.json 2>&1)"
+          echo "$OUT" | tail -20
+          DEFECTS="$(printf '%s' "$OUT" | grep -oE '[0-9]+ failed' | grep -oE '[0-9]+' | head -1)"
+          echo "defects=${DEFECTS:-0}" >> "$GITHUB_OUTPUT"
+          poetry run python - <<'PY' > /tmp/reach.txt
+          import json
+          try: d = json.load(open('/tmp/cov2.json'))
+          except Exception: print(0); raise SystemExit
+          tot = hit = 0
+          for k, f in d.get("files", {}).items():
+              if "/tests/" in k or k.startswith("tests/"): continue
+              s = f.get("summary") or {}
+              tot += s.get("num_statements", 0); hit += s.get("covered_lines", 0)
+          print(round(100.0 * hit / tot, 1) if tot else 0)
+          PY
+          PCT="$(cat /tmp/reach.txt 2>/dev/null || echo 0)"
+          echo "reach=${PCT:-0}" >> "$GITHUB_OUTPUT"
+          echo "adversary reach after this cycle: ${PCT}%"
+          exit 0
+
+      # ---------------------------------------------------------------------
+      # PR — commit the cycle and open a review PR (gated; never merges).
+      # ---------------------------------------------------------------------
+      - name: Commit cycle and open PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+          git config user.name  "sdlc-loop"
+          git config user.email "sdlc-loop@users.noreply.github.com"
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git"
+          N="${{ steps.cyc.outputs.n }}"
+          EVAL_RC="${{ steps.eval.outputs.rc }}"
+          PASSED="${{ steps.eval.outputs.passed }}"
+          FAILED="${{ steps.eval.outputs.failed }}"
+          DEFECTS="${{ steps.attack.outputs.defects }}"
+          REACH="${{ steps.attack.outputs.reach }}"
+          # github.run_number is not a safe unique branch key; fall back to run_id.
+          BRANCH="loop/cycle-$N"
+          if git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null 2>&1; then
+            BRANCH="loop/cycle-$N-${{ github.run_id }}"
+            echo "loop/cycle-$N exists; using $BRANCH"
+          fi
+          git checkout -b "$BRANCH"
+          git add -A
+          if ! git commit -m "loop: cycle $N (eval ${PASSED}p/${FAILED}f, ${DEFECTS} findings, reach ${REACH}%)"; then
+            echo "nothing to commit — the build made no changes. Skipping PR."
+            exit 0
+          fi
+          git push -u origin "$BRANCH"
+          GATE="$([ "$EVAL_RC" = "0" ] && echo '✅ regression + acceptance PASS' || echo '⛔ EVAL FAILED — do not merge as-is')"
+
+          TRIAGE_MD="reports/adversary/triage-$N.md"
+          if [ -f "$TRIAGE_MD" ]; then RANKED="$(head -c 4000 "$TRIAGE_MD")"; else RANKED="_(triage produced no table this cycle)_"; fi
+          REFUTED="reports/adversary/refuted-$N.md"
+
+          {
+            echo "Autonomous SDLC cycle $N against \`spec/spec.md\`."
+            echo
+            echo "- **Eval (regression):** ${PASSED} passed / ${FAILED} failed — $GATE"
+            echo "- **Findings surviving refutation:** ${DEFECTS} (each failing adversary test = one finding)"
+            echo "- **Adversary reach:** ${REACH}% of \`bhulan/\` has been attacked — gaps in \`reports/adversary/coverage-gaps.md\` (a targeting aid, not a KPI)"
+            echo
+            echo "## Ranked findings — you decide"
+            echo
+            echo "$RANKED"
+            echo
+            echo "---"
+            echo "Triage **ranks only**; nothing is auto-promoted. Pick the findings worth fixing and they become the next cycle's spec. Refuted false positives: see \`$REFUTED\`."
+            echo
+            echo "The build proposed the code changes; **you** decide. **Merge to keep** or **close to discard**. This loop never merges to master and never deploys. bhulan is a public demo — review carefully."
+          } > /tmp/pr_body.md
+
+          PR_URL="$(gh pr create --base master --head "$BRANCH" \
+            --title "loop: cycle $N — $GATE · ${DEFECTS} findings · reach ${REACH}%" \
+            --body-file /tmp/pr_body.md)"
+          echo "PR: $PR_URL"
