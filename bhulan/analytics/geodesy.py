@@ -55,15 +55,24 @@ def bounding_box(
 ) -> Tuple[float, float, float, float]:
     """Return ``(min_lat, min_lon, max_lat, max_lon)`` for the given points.
 
-    The box is the *minimal-longitude-span* box. For the common case (points
-    within a <180° longitude window) this is the naive ``min/max`` and
-    ``min_lon <= max_lon`` as usual. When the points straddle the antimeridian
-    (±180°) — e.g. GPS jitter around Fiji or the Aleutians — the minimal box
-    crosses ±180° and is reported with ``min_lon > max_lon``: the box runs east
-    from ``min_lon``, over +180° / −180°, to ``max_lon`` (the "short way
-    round"). A consumer must treat ``min_lon > max_lon`` as an
+    The box is the *true minimal-longitude-span* box, found by cutting the
+    longitude circle at its single **largest angular gap**. Sort the unique
+    longitudes and measure the gap between each adjacent pair plus the
+    wraparound gap (``min + 360 − max``); the largest gap is the arc the track
+    does *not* occupy, so the minimal box spans the complement — from the
+    longitude just after that gap, eastward, to the longitude just before it.
+
+    For the common case (points within a <180° window that does not cross
+    ±180°) the largest gap is always the wraparound gap, so the result is the
+    naive ``min/max`` with ``min_lon <= max_lon`` — byte-identical to a plain
+    min/max. When the largest gap is an interior one — e.g. GPS jitter around
+    Fiji or the Aleutians, or any track visiting 3+ spread-out longitudes — the
+    minimal box crosses ±180° and is reported with ``min_lon > max_lon``: the
+    box runs east from ``min_lon``, over +180° / −180°, to ``max_lon`` (the
+    "short way round"). A consumer must treat ``min_lon > max_lon`` as an
     antimeridian-crossing box rather than an empty/inverted one. See
-    ``spec/adrs/0004-antimeridian-projection-and-bbox.md``.
+    ``spec/adrs/0006-largest-gap-minimal-bbox.md`` (supersedes the
+    two-candidate note in ``0004-antimeridian-projection-and-bbox.md``).
     """
     if not lats or not lons:
         raise ValueError("bounding_box requires at least one point")
@@ -75,33 +84,37 @@ def bounding_box(
 
     raw_min = float(np.min(lons_a))
     raw_max = float(np.max(lons_a))
-    raw_span = raw_max - raw_min
 
-    # Only a track whose raw longitude span exceeds 180° can possibly be tighter
-    # when measured the other way around the globe, so a straddle is only even
-    # considered past that gate. This mirrors ``latlon_to_xy_m``'s straddle test
-    # (``raw_max - raw_min > 180``) exactly, which matters for byte-identity: for
-    # a same-sign track the ``+360`` shift below reintroduces ~1e-13° of float
-    # noise, and comparing the noisy shifted span against the raw span would
-    # occasionally (and pointlessly) pick the shifted box for a track that never
-    # goes near ±180°. Gating on the raw span keeps every non-straddling track on
-    # the exact naive min/max (byte-identical to before).
-    if raw_span > 180.0:
-        # Longitudes shifted into [0, 360) so points clustered near ±180° become
-        # contiguous; prefer the shifted box only when it is strictly tighter.
-        shifted = np.where(lons_a < 0.0, lons_a + 360.0, lons_a)
-        shifted_min = float(np.min(shifted))
-        shifted_max = float(np.max(shifted))
-        if shifted_max - shifted_min < raw_span:
-            # Crosses the antimeridian: fold the [0, 360) edges back to (-180, 180].
-            min_lon = ((shifted_min + 180.0) % 360.0) - 180.0
-            max_lon = ((shifted_max + 180.0) % 360.0) - 180.0
-        else:
-            min_lon = raw_min
-            max_lon = raw_max
-    else:
+    # Largest-gap minimal box. Sort the unique longitudes and find the widest
+    # arc between adjacent points (interior gaps) versus the wraparound gap that
+    # closes the circle from the max back to the min. The largest gap is the
+    # slice of the circle the track never occupies; the minimal box is its
+    # complement.
+    uniq = np.unique(lons_a)  # sorted ascending, deduplicated
+    if uniq.size < 2:
+        # A single distinct longitude: the box is that longitude, naive framing.
         min_lon = raw_min
         max_lon = raw_max
+    else:
+        interior_gaps = np.diff(uniq)
+        wrap_gap = (uniq[0] + 360.0) - uniq[-1]
+        max_interior = float(np.max(interior_gaps))
+        # Ties (``wrap_gap >= max_interior``) resolve to the wraparound gap so a
+        # non-straddling track keeps the exact naive min/max: for any track
+        # inside a <180° window the wrap gap (>180°) strictly dominates every
+        # interior gap (<180°), guaranteeing byte-identity to a plain min/max.
+        if wrap_gap >= max_interior:
+            min_lon = raw_min
+            max_lon = raw_max
+        else:
+            # Cut at the largest interior gap, between ``uniq[i]`` and
+            # ``uniq[i+1]``. The box runs east from the point just after the gap
+            # (``uniq[i+1]``), over ±180°, back to the point just before it
+            # (``uniq[i]``). Since ``uniq[i+1] > uniq[i]`` this yields
+            # ``min_lon > max_lon`` — the antimeridian-crossing encoding.
+            i = int(np.argmax(interior_gaps))
+            min_lon = float(uniq[i + 1])
+            max_lon = float(uniq[i])
 
     return (min_lat, min_lon, max_lat, max_lon)
 
