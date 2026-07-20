@@ -5,99 +5,88 @@
 > The loop NEVER merges to master and NEVER deploys — you do. bhulan is a public
 > demo; keep it PR-gated.
 
-**Status:** cycle 9
-**Cycle of last revision:** 9
+**Status:** cycle 10
+**Cycle of last revision:** 10
 
 ---
 
 ## 1. This cycle's single outcome
 
-**Fix the two regressions cycle 8 introduced into `merge_nearby_stops`**: an
-O(n²) accumulator (a DoS) and an inconsistent centroid (weighted latitude vs.
-unweighted longitude) that violates AC1 for unequal-`sample_count` chains.
+**Stop deeply-nested JSON input from crashing the public API with a 500.** A
+deeply-nested JSON payload (tiny — `O(depth)` bytes, e.g. `[[[…1…]]]` ~20 KB)
+sent to any endpoint that parses untrusted text makes `json.loads` raise
+`RecursionError`, which is uncaught and surfaces as an unauthenticated **HTTP
+500** (a crash / availability defect), instead of a clean 4xx rejection.
 
-Cycle 8 made the merged centroid/`radius_m` truthful, but:
+`bhulan/analytics/parsers.py` calls `json.loads` directly on untrusted input at
+three sites (lines ~238, ~273 in `parse_json`, and ~352 in `parse_any`). It is
+reachable unauthenticated through `POST /v1/parse/file` (a `.json`/plain-text or
+any non-`.gpx/.kml/.fit` upload), and through the free-text `points`/track fields
+of `/v1/insights`, `/v1/compare`, and `/v1/plot/validate`.
 
-- **O(n²) (availability / DoS).** It calls `_merge_members(groups[-1])` on *every*
-  append to a growing group, and `_merge_members` is O(group size), so a single
-  chain of n pairwise-close stops costs O(n²). Measured on master: 0.125 s at
-  500 stops → 7.36 s at 4000 (clean 4×-per-doubling). Reachable unauthenticated
-  via `/v1/insights` with `merge_stops_within_m` and an ordinary slow-drift GPS
-  trail. Cycle 7 was O(n); this is a regression.
-- **Inconsistent centroid (correctness / AC1).** It weights latitude by
-  `sample_count` but takes an *unweighted* `circular_mean_lon`. For a chain of
-  unequal-weight stops (a dense dwell between two brief stops) the lat is pulled
-  toward the dense member while the lon is not, so the centroid lands ~49 m from
-  a member — outside `merge_radius_m`, violating cycle 8's own AC1.
-
-Acceptance tests (already on master, currently red):
-`tests/adversary/test_merge_nearby_stops_chain_quadratic_blowup.py`,
-`tests/adversary/test_merge_nearby_stops_weighted_lat_unweighted_lon_breaks_ac1.py`.
+Acceptance tests (already on master, currently red — 8 cases across two files):
+`tests/adversary/test_parse_file_free_text_deep_nesting_recursion_crash.py` and
+`tests/adversary/test_deeply_nested_json_recursion_crash.py`.
 
 ## 2. Hard constraints
 
 - **The named tests are the acceptance tests** — they already exist and are
-  failing. Fix the product code; do NOT weaken them.
-- **Make the accumulation O(n).** Decide group membership in the single pass (the
-  cycle-7 single-linkage decision against the immediately preceding original
-  stop is unchanged), but compute each group's merged `Stop` **once** — e.g.
-  build the list of groups in the loop, then map each group through
-  `_merge_members` a single time after the loop. Do NOT call `_merge_members`
-  inside the per-stop loop. Total cost must be linear in the number of stops
-  (verify the timing test passes and the scaling is ~linear, not ~quadratic).
-- **Make the centroid consistent and weighted.** Longitude must use the **same
-  `sample_count` weighting** as latitude — a weighted circular mean:
-  `atan2(Σ wᵢ·sin(lonᵢ), Σ wᵢ·cos(lonᵢ))` with `wᵢ = sample_count`. Then the
-  centroid is the true weighted centroid, which for a single-linkage chain (every
-  member within `merge_radius_m` of the mass around the dense member) lies within
-  `merge_radius_m` of every member. `circular_mean_lon` itself is used elsewhere
-  and must stay unchanged — add the weighted variant alongside it (or inline the
-  weighted circular mean in `_merge_members`).
-- **Do NOT change the merge decision or count** — the set of stops that merge is
-  identical to cycles 7–8; only performance and the centroid longitude change.
-- **Preserve cycle 8's correctness.** `radius_m` stays the true enclosing radius
-  (`max` over members of `haversine_m(centroid, member) + member.radius_m`) and
-  must still bound every member. `duration_s`, indices, timestamps, count span
-  all members. Equal-`sample_count` merges (including every two-stop equal-weight
-  merge) stay byte-identical to cycle 8.
-- **Do NOT regress cycles 1–8** — antimeridian projection/centroid, largest-gap
-  bbox, gap-aware detect/merge, transitive merge count/geometry all green. Do NOT
-  touch `haversine_m`, `latlon_to_xy_m`, `bounding_box`, `circular_mean_lon`, or
-  `detect_stops`/`_cluster_end`.
-- Backend/analytics only. No new dependencies, no API-shape changes, no
-  DB/schema changes.
+  failing. Fix the product code; do NOT weaken them. (Read each test to confirm
+  the expected status: a clean client error, **not** 500, and not a hang.)
+- **Fix at the root, once.** Add a single shared depth-guarded JSON loader (e.g.
+  `parsers._loads_untrusted(text, max_depth=...)`) and use it at every
+  `json.loads` site that consumes untrusted input. Prefer a **pre-scan of the
+  raw text's maximum bracket/brace nesting depth** and reject before decoding
+  (raise a `ValueError`/domain error the API layer already maps to 4xx), rather
+  than relying on catching `RecursionError` after the fact (which can leave the
+  interpreter state fragile). If `RecursionError` is caught as a belt-and-braces
+  fallback, convert it to the same clean 4xx.
+- **Pick a sane cap.** A nesting depth of, say, 200 is far beyond any real
+  GPS/track document yet well below CPython's ~1000 recursion limit. Document
+  the chosen cap. Valid inputs (real GPX/KML/FIT and ordinary `points` arrays,
+  which are shallow) must be entirely unaffected.
+- **Every affected endpoint returns a clean client error, never 500 and never a
+  hang**, for the deep-nesting payload: `/v1/parse/file`, `/v1/insights`,
+  `/v1/compare`, `/v1/plot/validate`.
+- **Also cover the structured-payload variant** if it shares the path — the
+  second test file targets a deeply-nested `points` array whose 422 error body
+  recurses during rendering; ensure that too returns a clean bounded error.
+- **Do NOT regress cycles 1–9** and all currently-passing parser/unit tests. Do
+  NOT change the response shape for valid input or for ordinary invalid input
+  (a normal malformed body must still return its current 4xx).
+- Backend/analytics + API-error-handling only. No new dependencies, no DB/schema
+  changes.
 
 ## 3. Non-negotiable acceptance criteria
 
-- **AC1:** merging a chain of n pairwise-close stops is linear-time — the
-  `chain_quadratic_blowup` timing test passes with comfortable margin.
-- **AC2:** for an unequal-`sample_count` chain (dense dwell between brief stops),
-  the reported centroid is within `merge_radius_m` (haversine) of every member.
-- **AC3:** `radius_m` still bounds the distance from the reported centroid to the
-  farthest member (cycle 8 correctness intact).
-- **AC4:** the *set* of stops that merge and equal-weight merge geometry are
-  unchanged from cycle 8 (byte-identical for equal-`sample_count` groups).
-- **AC5:** `poetry run pytest tests/unit/ tests/adversary/test_merge_nearby_stops_chain_quadratic_blowup.py tests/adversary/test_merge_nearby_stops_weighted_lat_unweighted_lon_breaks_ac1.py tests/adversary/test_merge_nearby_stops_chain_centroid_radius_wrong.py tests/adversary/test_merge_nearby_stops_chain_drift_undermerges.py -q` is green.
+- **AC1:** a deep-nesting JSON upload to `/v1/parse/file` returns a clean 4xx
+  (client error), not 500 and not a hang.
+- **AC2:** the deep-nesting free-text field on `/v1/insights`, `/v1/compare`, and
+  `/v1/plot/validate` each return a clean 4xx, not 500.
+- **AC3:** the deeply-nested structured `points` array returns a clean bounded
+  4xx (no recursion crash while rendering the error body).
+- **AC4:** valid inputs and ordinary malformed inputs are unchanged — real
+  track documents parse as before; a normal bad body returns its current 4xx.
+- **AC5:** `poetry run pytest tests/unit/ tests/adversary/test_parse_file_free_text_deep_nesting_recursion_crash.py tests/adversary/test_deeply_nested_json_recursion_crash.py -q` is green.
 
 ## 4. Known traps for the adversary to probe next (backlog / product decisions)
 
-- **Transitive-merge span cap (PRODUCT DECISION, owner):** a chain spanning
-  ≫ `merge_radius_m` still merges into one wide stop; AC2 above holds only
-  because single-linkage keeps members clustered around the mass, but a genuinely
-  long drift chain can still exceed it. Whether to cap the merge span (splitting
-  the chain) remains the owner's call — see
-  `test_merge_nearby_stops_runaway_chain_span.py` on the parallel driver's branch.
+- **Transitive-merge span cap (PRODUCT DECISION, owner):** heavy-dwell /
+  runaway-chain findings — a merged stop's centroid can't stay within
+  `merge_radius_m` once the chain spans > 2× it. Owner's call whether to cap.
+- **Zero-time-delta movement** (`test_zero_time_delta_movement_*`): segments with
+  identical timestamps mis-handled in speed/distance.
 - **Polar dwell false-negative** (`test_pole_dwell_stop_false_negative.py`).
-- Deeply-nested-JSON recursion → 500; non-finite reported `speed_mps`;
-  datetime-overflow / malformed-type.
+- Non-finite reported `speed_mps`; datetime-overflow / malformed-type.
+- Replace the deleted wall-clock `detect_stops` DoS test with a **structural**
+  (operation-count) O(n) regression test — no timing threshold.
 
 ## 5. Definition of done for this cycle
 
-- AC1–AC5 pass. Group geometry computed once per group (O(n)); centroid longitude
-  `sample_count`-weighted to match latitude; cycle-8 `radius_m` correctness and
-  merge decision/count unchanged; cycles 1–8 green.
-- ADR recorded in `spec/adrs/` (document the O(n) restructure and the weighted
-  circular mean).
+- AC1–AC5 pass. One shared depth-guarded untrusted-JSON loader; all four
+  endpoints return a clean 4xx (never 500) on deep nesting; valid/ordinary input
+  unchanged; cycles 1–9 green.
+- ADR recorded in `spec/adrs/` (document the depth cap and the pre-scan approach).
 - A PR is opened for review.
 
 ## 6. Deploy target
