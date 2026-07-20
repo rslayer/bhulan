@@ -1,97 +1,93 @@
 # Product Spec — bhulan
 
-> Living spec. The cockpit writes it; the loop (`.github/workflows/loop.yml`)
-> reads it, builds, iterates (eval → adversarial → robustness → refute →
-> triage), then opens a PR. The loop NEVER merges to master and NEVER deploys —
-> you do. bhulan is a public demo; keep it PR-gated.
+> Living spec. The cockpit writes it; the loop reads it, builds, iterates
+> (eval → adversarial → robustness → refute → triage), then opens a PR.
+> The loop NEVER merges to master and NEVER deploys — you do. bhulan is a public
+> demo; keep it PR-gated.
 
-**Status:** cycle 3
-**Cycle of last revision:** 3
+**Status:** cycle 4
+**Cycle of last revision:** 4
 
 ---
 
 ## 1. This cycle's single outcome
 
-**Make `parse_kml_bytes` linear (O(n)) for the `<Placemark><TimeStamp>+<Point>`
-shape** — currently O(n²), an unauthenticated DoS on `/v1/parse/file` within
-normal usage.
+**Make the local-tangent-plane projection and the bounding box
+antimeridian-aware**, so a track near ±180° longitude is no longer projected as
+if it spans the globe.
 
-Found by robustness run 4 (`reports/adversary/robustness-4.md`). Root cause is
-precise: `bhulan/analytics/file_parsers.py::parse_kml_bytes` (~lines 134-142),
-for **every** `<Point>` element, calls `_nearest_timestamp(root, elem)` to find
-its enclosing Placemark's timestamp. Because it parses with stdlib
-`xml.etree.ElementTree` (no parent pointers), the `elem.getparent()` check is
-**always None**, so each Point triggers a **full walk from the document root**:
-`_nearest_timestamp` iterates every `<Placemark>` in the whole document and
-`_contains` walks each Placemark's subtree. For n Placemarks (one Point each) —
-exactly how Google My Maps / Earth exports dated waypoints — that is O(n²),
-with no exotic input.
+Found by sweep 5 (a silently-wrong-answer geo-correctness bug, the class prior
+runs never covered). Root cause is one function:
+`bhulan/analytics/geodesy.py::latlon_to_xy_m` projects with a **linear**
+longitude difference (`x = (lons - lon0) * meters_per_deg_lon`), no wraparound.
+Two points at lon `179.9999` and `-179.9999` (~22 m apart in reality) project
+~40 000 km apart. Because both `detect_stops` and `detect_hotspots` cluster on
+this projection, a real tight dwell at the antimeridian yields **`stops: []`**;
+and `geodesy.py::bounding_box` has the same blindness (naive min/max over raw
+longitude), so `InsightsSummary.bbox` spans ~360° for a sub-meter dwell. The
+same request's `total_distance_km` is *correct* (`haversine_m` wraps properly),
+so the response is internally self-contradictory. Reachable via ordinary
+unauthenticated `/v1/insights` input — any track near Fiji, Tonga, Kiribati,
+the Aleutians, or Chukotka.
 
-(`tests/adversary/test_kml_point_timestamp_quadratic_blowup.py`)
+(`tests/adversary/test_antimeridian_projection_breaks_stops_and_bbox.py`)
 
 ## 2. Hard constraints
 
-- **The named test is the acceptance test** — it already exists and is failing
-  (it asserts a growth bound / wall-clock ceiling at n, 2n, 4n, 8n). Fix the
-  product code to make it pass; do NOT weaken it.
-- **Fix the algorithm, not a symptom.** Do the timestamp lookup in a **single
-  pass**: walk the document once, building a map from each `<Placemark>` (or its
-  contained `<Point>`) to its timestamp, then resolve each Point in O(1) — rather
-  than scanning the whole document per Point. Equivalent alternative: iterate
-  Placemarks once and, for each, read its own Point(s) + timestamp together.
-- **Do NOT cap the input size as the fix.** A size cap changes behaviour for
-  legitimate large files; the goal is that a legitimate large KML parses fast.
-- **Do NOT switch the whole parser to `lxml`** just to get `getparent()` — that
-  is a new dependency and a larger change than needed. A single-pass map with
-  stdlib `ElementTree` is the intended fix. (If a Placemark→child index is
-  cleaner via `ElementTree`'s own iteration, use that.)
-- **Output must be byte-for-byte unchanged** for a correctly-formed KML — same
-  points, same timestamps, same order. GPX and FIT parsing must be untouched.
-- **Preserve every existing passing test** — the parser unit tests, and cycles
-  1–2's gap-aware analytics tests, must stay green.
-- Backend/parsing only. No new dependencies, no API-shape changes, no DB/schema
-  changes. Do not touch the analytics (`stops.py`/`hotspots.py`/`trips.py`).
+- **The named test is the acceptance test** — it already exists and is failing.
+  Fix the product code; do NOT weaken it.
+- **Fix at the root, once.** The fix belongs in `latlon_to_xy_m` (and
+  `bounding_box`) in `geodesy.py`, not per-caller in stops/hotspots — fixing the
+  projection there fixes every consumer. Normalise the longitude difference to
+  the range `(-180, 180]` (i.e. `((lons - lon0 + 180) % 360) - 180`) before
+  scaling to metres, so the shortest signed longitude delta is used.
+- **`bounding_box` must handle wraparound** — for points clustered near ±180°,
+  report the minimal-span box (which may cross the antimeridian, e.g.
+  `lon_min=179.99, lon_max=-179.99` interpreted as the short way round), not the
+  naive `-179.99 … 179.99` that implies the whole globe. Document the convention
+  chosen in the return value / ADR.
+- **`haversine_m` is already correct — do NOT touch it.** It is the cross-check.
+- **Output must be unchanged for all non-antimeridian tracks** — the vast
+  majority of inputs. The projection for points far from ±180° must be
+  numerically identical to today (the normalisation is a no-op there).
+- **Preserve every existing passing test** — geodesy unit tests, and cycles 1–3
+  (gap-aware stops/hotspots/merge, KML O(n)) must stay green.
+- Backend/analytics only. No new dependencies, no API-shape changes (adding a
+  documented bbox-crosses-antimeridian convention is fine; changing the field
+  set is not), no DB/schema changes.
 
 ## 3. Non-negotiable acceptance criteria
 
-- **AC1:** parsing a KML with n `<Placemark><TimeStamp>+<Point>` elements is
-  **sub-quadratic** — the growth assertion in the acceptance test passes at n,
-  2n, 4n, 8n.
-- **AC2:** a normal, correctly-formed KML still parses to exactly the same
-  points/timestamps/order as before (no output regression); GPX and FIT parsing
-  unchanged.
-- **AC3:** a large-but-legitimate KML (thousands of placemarks) parses well
-  under the worker timeout, with no size-cap rejection.
-- **AC4:** edge shapes still parse correctly — a `<gx:Track>` KML, a Placemark
-  with no timestamp (Point kept, timestamp None), multiple Points per Placemark.
-- **AC5:** `poetry run pytest tests/unit/ tests/adversary/test_kml_point_timestamp_quadratic_blowup.py -q` is green.
+- **AC1:** a tight dwell straddling ±180° is detected as a stop (and a hotspot),
+  same as the identical dwell placed anywhere else on Earth.
+- **AC2:** `bbox` for an antimeridian-straddling track reports a sub-degree span
+  (the true small extent), not ~360°.
+- **AC3:** `stops`/`bbox` and `total_distance_km` in the same response are now
+  mutually consistent for such a track.
+- **AC4:** every non-antimeridian track produces byte-identical projection,
+  stops, hotspots, and bbox to before (no regression).
+- **AC5:** `poetry run pytest tests/unit/ tests/adversary/test_antimeridian_projection_breaks_stops_and_bbox.py -q` is green.
 
 ## 4. Known traps for the adversary to probe next
 
-- Other per-element full-document walks: does GPX/FIT parsing have the same
-  O(n²) shape anywhere?
-- XML entity expansion / billion-laughs on `/v1/parse/file` (a different DoS).
-- Deeply-nested KML `<Folder>` trees, malformed/truncated KML mid-element.
-- Memory growth (not just time) with document size.
-- Any remaining metamorphic properties in the analytics after cycles 1–2.
+- The poles (lat ±90) — does the tangent-plane projection degrade there too?
+- A track that legitimately spans a *wide* longitude range (a real
+  transcontinental trip) vs. a jitter across ±180 — the fix must not mistake one
+  for the other.
+- `/v1/compare` `shared_hotspots` pooling across two antimeridian tracks.
+- Bbox convention consumers: does `/v1/plot` render a crosses-antimeridian bbox
+  correctly?
+- Remaining backlog: GPX/FIT parsing complexity, XML entity-expansion DoS,
+  memory growth (from this sweep's other probed areas if any survived triage).
 
 ## 5. Definition of done for this cycle
 
-- AC1–AC5 pass. KML timestamp resolution is a single pass; large legitimate
-  files parse fast; no size-cap band-aid; no output or GPX/FIT regression; no
-  `lxml` dependency added.
-- ADR recorded in `spec/adrs/`.
+- AC1–AC5 pass. The projection and bbox wrap correctly at ±180°; haversine
+  untouched; non-antimeridian output unchanged.
+- ADR recorded in `spec/adrs/` (document the bbox wraparound convention).
 - A PR is opened for review. **No merge to `master` without your review.**
 
 ## 6. Deploy target
 
 None from the loop. The loop opens a PR; you review and merge. bhulan is a
 public demo — production stays gated.
-
----
-
-## Change log
-- cycle 1 — cockpit — time-gap-aware detect_stops/detect_hotspots.
-- cycle 2 — cockpit — gap-aware merge_nearby_stops (sibling re-merge).
-- cycle 3 — cockpit — make parse_kml_bytes O(n): resolve each Point's Placemark
-  timestamp via a single-pass map instead of a full document walk per Point.
