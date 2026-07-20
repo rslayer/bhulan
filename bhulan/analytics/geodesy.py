@@ -106,6 +106,43 @@ def bounding_box(
     return (min_lat, min_lon, max_lat, max_lon)
 
 
+def circular_mean_lon(lons: Sequence[float]) -> float:
+    """Wraparound-aware mean of longitudes, in degrees on ``(-180, 180]``.
+
+    A plain ``numpy.mean`` over raw longitudes lands on the *antipode* for a
+    cluster that straddles the antimeridian (±180°): the mean of ``179.9999``
+    and ``-179.9999`` is ``~0.0``, a point ~20,000 km from where every sample
+    actually sits. This helper is the shared root fix reused by
+    ``detect_stops`` / ``detect_hotspots`` centroids and
+    ``merge_nearby_stops``' midpoint.
+
+    Gated on the straddle exactly like ``bounding_box`` / ``latlon_to_xy_m``:
+    when the raw longitude span is ``<= 180°`` the plain arithmetic mean is
+    returned, so non-antimeridian output stays byte-identical. Only when the
+    raw span exceeds 180° are the longitudes shifted into ``[0, 360)``,
+    averaged, and folded back to ``(-180, 180]`` so the mean lands inside the
+    real cluster. See ``spec/adrs/0005-circular-mean-longitude.md``.
+    """
+    lons_a = np.asarray(lons, dtype=np.float64)
+    if lons_a.size == 0:
+        raise ValueError("circular_mean_lon requires at least one longitude")
+
+    raw_min = float(np.min(lons_a))
+    raw_max = float(np.max(lons_a))
+
+    # Same gate as ``latlon_to_xy_m`` / ``bounding_box``: only a cluster whose
+    # raw span exceeds 180° can straddle ±180°. Gating on the raw span keeps
+    # every non-straddling cluster on the exact plain mean (byte-identical to
+    # before): the ``+360`` shift below reintroduces ~1e-13° of float noise, so
+    # unconditionally taking the shifted mean would perturb ordinary output.
+    if raw_max - raw_min > 180.0:
+        shifted = np.where(lons_a < 0.0, lons_a + 360.0, lons_a)
+        mean_shifted = float(np.mean(shifted))
+        # Fold the [0, 360) mean back to (-180, 180].
+        return ((mean_shifted + 180.0) % 360.0) - 180.0
+    return float(np.mean(lons_a))
+
+
 def latlon_to_xy_m(
     lats: Sequence[float], lons: Sequence[float]
 ) -> Tuple[np.ndarray, np.ndarray]:
