@@ -61,7 +61,7 @@ def _cluster_radius_m(xs: np.ndarray, ys: np.ndarray) -> float:
 def _cluster_end(
     xs: np.ndarray,
     ys: np.ndarray,
-    ts: Sequence[datetime],
+    ts: Sequence[Optional[datetime]],
     i: int,
     n: int,
     radius_m: float,
@@ -228,7 +228,8 @@ def merge_nearby_stops(
             if prev.end_ts is not None and s.start_ts is not None
             else 0.0
         )
-        close_in_space = haversine_m(prev.lat, prev.lon, s.lat, s.lon) <= merge_radius_m
+        centroid_dist_m = haversine_m(prev.lat, prev.lon, s.lat, s.lon)
+        close_in_space = centroid_dist_m <= merge_radius_m
         close_in_time = gap_s < split_gap_s
 
         if close_in_space and close_in_time:
@@ -242,7 +243,13 @@ def merge_nearby_stops(
                 # Sum of the real dwells, not the calendar span: even a small
                 # inter-stop gap is travel, not presence.
                 duration_s=prev.duration_s + s.duration_s,
-                radius_m=max(prev.radius_m, s.radius_m),
+                # Recentring to the midpoint moves every original sample ~half
+                # the centroid separation further from the new centre, so the
+                # merged spread is that displacement plus each cluster's own
+                # radius. ``max(prev, s)`` alone reported the spread around the
+                # *discarded* centroids — e.g. two tight clusters 40m apart
+                # merged to a claimed ~0m radius while truly spanning ~20m.
+                radius_m=centroid_dist_m / 2.0 + max(prev.radius_m, s.radius_m),
                 start_index=prev.start_index,
                 end_index=s.end_index,
                 sample_count=prev.sample_count + s.sample_count,

@@ -37,11 +37,11 @@ purely as an artifact of which end of the chain the algorithm started from.
 
 from __future__ import annotations
 
-import bhulan.storage.mongo_repo as mongo_repo  # noqa: F401  (fixture parity, see conftest)
 from datetime import datetime, timedelta, timezone
 
 from fastapi.testclient import TestClient
 
+import bhulan.storage.mongo_repo as mongo_repo  # noqa: F401  (fixture parity, see conftest)
 from bhulan.analytics.geodesy import haversine_m
 
 _T0 = datetime(2024, 1, 1, tzinfo=timezone.utc)
