@@ -217,43 +217,58 @@ def merge_nearby_stops(
     from bhulan.analytics.geodesy import haversine_m
 
     merged: List[Stop] = []
+    # The stop that immediately preceded ``s`` in the *original* input, kept
+    # separate from the accumulating blob ``merged[-1]``. The spatial and
+    # time-gap merge decisions are made against this original neighbour, not
+    # the blob's drifted centroid, so a chain of consecutive pairwise-close
+    # stops collapses fully (single-linkage over consecutive stops). See ADR
+    # 0007.
+    prev_original: Optional[Stop] = None
     for s in stops:
         if not merged:
             merged.append(s)
+            prev_original = s
             continue
-        prev = merged[-1]
+        blob = merged[-1]
 
+        # Decide against the immediately preceding *original* stop. Its
+        # ``end_ts`` equals the blob's ``end_ts`` (the blob always ends at its
+        # last member), so gap-awareness is the original A–B boundary either
+        # way; the spatial basis is what must not drift with the blob.
         gap_s = (
-            (s.start_ts - prev.end_ts).total_seconds()
-            if prev.end_ts is not None and s.start_ts is not None
+            (s.start_ts - prev_original.end_ts).total_seconds()
+            if prev_original.end_ts is not None and s.start_ts is not None
             else 0.0
         )
-        centroid_dist_m = haversine_m(prev.lat, prev.lon, s.lat, s.lon)
+        centroid_dist_m = haversine_m(
+            prev_original.lat, prev_original.lon, s.lat, s.lon
+        )
         close_in_space = centroid_dist_m <= merge_radius_m
         close_in_time = gap_s < split_gap_s
 
         if close_in_space and close_in_time:
-            lat = (prev.lat + s.lat) / 2.0
-            lon = circular_mean_lon([prev.lon, s.lon])
+            lat = (blob.lat + s.lat) / 2.0
+            lon = circular_mean_lon([blob.lon, s.lon])
             merged[-1] = Stop(
                 lat=lat,
                 lon=lon,
-                start_ts=prev.start_ts,
+                start_ts=blob.start_ts,
                 end_ts=s.end_ts,
                 # Sum of the real dwells, not the calendar span: even a small
                 # inter-stop gap is travel, not presence.
-                duration_s=prev.duration_s + s.duration_s,
+                duration_s=blob.duration_s + s.duration_s,
                 # Recentring to the midpoint moves every original sample ~half
                 # the centroid separation further from the new centre, so the
                 # merged spread is that displacement plus each cluster's own
                 # radius. ``max(prev, s)`` alone reported the spread around the
                 # *discarded* centroids — e.g. two tight clusters 40m apart
                 # merged to a claimed ~0m radius while truly spanning ~20m.
-                radius_m=centroid_dist_m / 2.0 + max(prev.radius_m, s.radius_m),
-                start_index=prev.start_index,
+                radius_m=centroid_dist_m / 2.0 + max(blob.radius_m, s.radius_m),
+                start_index=blob.start_index,
                 end_index=s.end_index,
-                sample_count=prev.sample_count + s.sample_count,
+                sample_count=blob.sample_count + s.sample_count,
             )
         else:
             merged.append(s)
+        prev_original = s
     return merged
