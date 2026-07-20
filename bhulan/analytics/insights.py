@@ -442,6 +442,9 @@ def compute_insights(request: InsightsRequest) -> InsightsReport:
         prepared,
         radius_m=opts.stop_radius_m,
         min_duration_s=opts.min_stop_minutes * 60.0,
+        # Reuse the trip gap setting so stops split on the same real-world
+        # absence trips do — one knob, no divergent gap mechanism.
+        split_gap_s=opts.trip_split_gap_minutes * 60.0,
     )
     stops = merge_nearby_stops(raw_stops, merge_radius_m=opts.merge_stops_within_m)
 
@@ -458,6 +461,7 @@ def compute_insights(request: InsightsRequest) -> InsightsReport:
         grid_m=opts.hotspot_grid_m,
         min_samples=opts.hotspot_min_samples,
         max_results=opts.hotspot_max_results,
+        split_gap_s=opts.trip_split_gap_minutes * 60.0,
     )
 
     moving_secs = sum(s.duration_s for s in segments if s.kind == "moving")
