@@ -216,24 +216,28 @@ def merge_nearby_stops(
 
     from bhulan.analytics.geodesy import haversine_m
 
-    merged: List[Stop] = []
-    # The member stops accumulated into each emitted blob, parallel to
-    # ``merged``. The merged geometry (centroid + ``radius_m``) is computed
-    # from these *real* members when the blob is emitted, not by repeated
-    # pairwise midpoint — for a 3+ chain the midpoint drifts toward the tail
-    # (can land outside ``merge_radius_m`` of an early member) and its
-    # last-hop radius understates the true spread. See ADR 0008.
+    # The member stops accumulated into each blob. The merged geometry
+    # (centroid + ``radius_m``) is computed from these *real* members — not by
+    # repeated pairwise midpoint — because for a 3+ chain the midpoint drifts
+    # toward the tail (can land outside ``merge_radius_m`` of an early member)
+    # and its last-hop radius understates the true spread. See ADR 0008.
+    #
+    # Group *membership* is decided in this single pass, but each group's merged
+    # ``Stop`` is built exactly ONCE, after the loop (see ADR 0011): calling
+    # ``_merge_members`` on every append made a length-n chain O(n²) — its
+    # per-blob recompute is O(group size) — a CPU-exhaustion DoS reachable via
+    # ``/v1/insights``. Deferring the geometry to a single post-loop map keeps
+    # the accumulation linear while leaving the decision untouched.
     groups: List[List[Stop]] = []
-    # The stop that immediately preceded ``s`` in the *original* input, kept
-    # separate from the accumulating blob ``merged[-1]``. The spatial and
-    # time-gap merge decisions are made against this original neighbour, not
-    # the blob's drifted centroid, so a chain of consecutive pairwise-close
-    # stops collapses fully (single-linkage over consecutive stops). See ADR
-    # 0007. This cycle changes ONLY the emitted geometry, never the decision.
+    # The stop that immediately preceded ``s`` in the *original* input. The
+    # spatial and time-gap merge decisions are made against this original
+    # neighbour, not a blob's drifted centroid, so a chain of consecutive
+    # pairwise-close stops collapses fully (single-linkage over consecutive
+    # stops). See ADR 0007. This cycle changes ONLY performance and the emitted
+    # centroid longitude, never the decision or which stops merge.
     prev_original: Optional[Stop] = None
     for s in stops:
-        if not merged:
-            merged.append(s)
+        if not groups:
             groups.append([s])
             prev_original = s
             continue
@@ -255,12 +259,14 @@ def merge_nearby_stops(
 
         if close_in_space and close_in_time:
             groups[-1].append(s)
-            merged[-1] = _merge_members(groups[-1])
         else:
-            merged.append(s)
             groups.append([s])
         prev_original = s
-    return merged
+
+    # A group of one never merged: pass the original stop through byte-for-byte
+    # (recomputing its geometry would round-trip the lon through trig and shift
+    # the last bit). Only real multi-member blobs get merged geometry.
+    return [g[0] if len(g) == 1 else _merge_members(g) for g in groups]
 
 
 def _merge_members(members: List[Stop]) -> Stop:
@@ -271,8 +277,14 @@ def _merge_members(members: List[Stop]) -> Stop:
     location and spread (ADR 0008):
 
     - ``lat`` = the ``sample_count``-weighted mean of the member centroid lats.
-    - ``lon`` = the (wraparound-aware) circular mean of the member centroid
-      lons, so a chain straddling ±180° still centres inside the cluster.
+    - ``lon`` = the ``sample_count``-weighted (wraparound-aware) circular mean
+      of the member centroid lons, so a chain straddling ±180° still centres
+      inside the cluster. Longitude uses the *same* weighting as latitude
+      (``wᵢ = sample_count``): weighting one axis but not the other pulled the
+      centroid off the true member line for unequal-weight chains, landing it
+      outside ``merge_radius_m`` of a member (ADR 0011 / AC1). The weighted
+      circular mean is inlined here; the module-level ``circular_mean_lon``
+      (unweighted, used elsewhere) is left unchanged.
     - ``radius_m`` = the true enclosing radius: the ``max`` over members of
       ``haversine_m(centroid, member) + member.radius_m``. This bounds the
       distance from the reported centroid to every member's own samples.
@@ -285,7 +297,12 @@ def _merge_members(members: List[Stop]) -> Stop:
 
     total_w = sum(m.sample_count for m in members)
     lat = sum(m.lat * m.sample_count for m in members) / total_w
-    lon = circular_mean_lon([m.lon for m in members])
+    # Weighted circular mean of the longitudes, wᵢ = sample_count — the same
+    # weighting as ``lat`` — so both axes agree and the centroid stays inside
+    # ``merge_radius_m`` of every member (ADR 0011).
+    sin_sum = sum(m.sample_count * math.sin(math.radians(m.lon)) for m in members)
+    cos_sum = sum(m.sample_count * math.cos(math.radians(m.lon)) for m in members)
+    lon = math.degrees(math.atan2(sin_sum, cos_sum))
     radius_m = max(
         haversine_m(lat, lon, m.lat, m.lon) + m.radius_m for m in members
     )
