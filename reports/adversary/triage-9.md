@@ -1,0 +1,18 @@
+# Triage — cycle 9
+
+`poetry run pytest tests/adversary/ -q`: **2 failed, 41 passed**.
+
+| rank | severity | finding (test file::test) | unauth? | blast radius | why it matters |
+|---|---|---|---|---|---|
+| 1 | high | `test_merge_nearby_stops_chain_drift_undermerges.py::test_chain_of_pairwise_close_stops_fully_merges` | yes — plain `/v1/insights` with `merge_stops_within_m` set | correctness / silently-wrong-answer | Any GPS-jitter trail with 3+ nearby stops silently under-merges depending on chain order, so trip counts, dwell durations and stop counts returned to every caller can be wrong with no error signal. |
+| 2 | high | `test_pole_dwell_stop_false_negative.py::test_polar_dwell_within_true_radius_is_detected_as_a_stop` | yes — plain `/v1/insights`, no auth or special headers | correctness / silently-wrong-answer (false negative) | A real, tight dwell near a pole (polar research stations, polar tourism/logistics tracks) is reported as *zero* stops instead of one — the API returns a confidently wrong, silently degraded answer rather than an error. |
+
+Both are pre-existing, already-documented backlog defects (see `spec/spec.md` §4 and prior `reports/adversary/refuted-5.md`, `refuted-7.md`) — no new regressions surfaced this cycle. Neither crashes the service or leaks data; both are purely correctness bugs in analytics output.
+
+## 1. `merge_nearby_stops` chain-drift under-merge (high)
+
+`bhulan/analytics/stops.py::merge_nearby_stops` (loop starting ~line 217) compares each incoming stop against `prev = merged[-1]` — the *already-merged blob's* recomputed centroid — instead of the original stop that immediately preceded it. Concrete failure: three co-linear stops A, B, C each 40m from their immediate neighbor, with `merge_radius_m=45` and no time gap between any of them. A caller reading the docstring ("merge consecutive stops whose centroids are within `merge_radius_m`") would expect all three to collapse into one stop, since every adjacent original pair is within radius. Instead A+B merge first into a blob centred 20m from both; C is then compared against that drifted centroid (60m away, outside the radius) rather than against B (40m away, inside it), so C is left unmerged — the endpoint returns 2 stops instead of 1. This is reachable by any unauthenticated caller simply by uploading an ordinary GPS-jitter trail (e.g. a walk along a building perimeter) with `merge_stops_within_m` set — no adversarial crafting beyond realistic jitter is needed, and the wrong answer is returned with a `200` and no warning.
+
+## 2. Polar dwell false negative in `latlon_to_xy_m` (high)
+
+`bhulan/analytics/geodesy.py::latlon_to_xy_m` (line 159) projects longitude linearly using a single global `meters_per_deg_lon = 111_320 * cos(lat0)`, which breaks down near the poles because longitude becomes nearly degenerate there (points a few meters apart can differ by up to 180° of longitude). Concrete failure: 30 samples alternating between (lat=89.9999, lon=0) and (lat=89.9999, lon=180) — a true separation of ~22.2m (cluster radius ~11.1m, confirmed via `haversine_m`) — get projected onto a spread of ~17.5m, overstating the true spread by ~57%. With `stop_radius_m=15` (comfortably above the true radius, below the inflated one), `detect_stops` reports **zero** stops for a dwell that is, in physical reality, a textbook stop. This is directly reachable via ordinary unauthenticated `points` input to `/v1/insights`; the failure mode is a silent false negative (missing stop) rather than a crash, which is worse for downstream consumers since there is no signal that anything went wrong.
