@@ -185,16 +185,36 @@ def detect_stops(
 
 
 def merge_nearby_stops(
-    stops: Sequence[Stop], merge_radius_m: Optional[float] = None
+    stops: Sequence[Stop],
+    merge_radius_m: Optional[float] = None,
+    split_gap_s: float = DEFAULT_SPLIT_GAP_S,
 ) -> List[Stop]:
     """
-    Merge consecutive stops whose centroids are within ``merge_radius_m``.
+    Merge consecutive stops whose centroids are within ``merge_radius_m`` *and*
+    that are not separated by a real-world absence.
 
     Useful when GPS jitter splits what is semantically a single visit into two
     back-to-back stops separated by a handful of moving samples.
+
+    Two stops close in space but separated by a gap of at least ``split_gap_s``
+    seconds (the device was off, or the data is missing) are two distinct
+    visits, not one dwell — exactly as :func:`detect_stops` established when it
+    became gap-aware. Merging them would recombine what ``detect_stops`` had
+    correctly split, folding a week-long absence back into a single stop, so we
+    leave them separate. ``split_gap_s`` is the *same* notion threaded through
+    :func:`detect_stops`; callers must pass the same value (see
+    :func:`bhulan.analytics.insights.compute_insights`) rather than introduce a
+    second, divergent gap.
+
+    When two stops *are* legitimately merged, the reported duration is the sum
+    of the two real dwells, never ``combined_end - combined_start`` — the latter
+    would count the (jitter-sized, but still non-zero) time spent moving between
+    them as dwell, and for a chained merge it would silently span any gap.
     """
     if merge_radius_m is None or not stops:
         return list(stops)
+
+    from bhulan.analytics.geodesy import haversine_m
 
     merged: List[Stop] = []
     for s in stops:
@@ -202,20 +222,26 @@ def merge_nearby_stops(
             merged.append(s)
             continue
         prev = merged[-1]
-        from bhulan.analytics.geodesy import haversine_m
 
-        if haversine_m(prev.lat, prev.lon, s.lat, s.lon) <= merge_radius_m:
-            combined_start = prev.start_ts
-            combined_end = s.end_ts
-            duration = (combined_end - combined_start).total_seconds()
+        gap_s = (
+            (s.start_ts - prev.end_ts).total_seconds()
+            if prev.end_ts is not None and s.start_ts is not None
+            else 0.0
+        )
+        close_in_space = haversine_m(prev.lat, prev.lon, s.lat, s.lon) <= merge_radius_m
+        close_in_time = gap_s < split_gap_s
+
+        if close_in_space and close_in_time:
             lat = (prev.lat + s.lat) / 2.0
             lon = (prev.lon + s.lon) / 2.0
             merged[-1] = Stop(
                 lat=lat,
                 lon=lon,
-                start_ts=combined_start,
-                end_ts=combined_end,
-                duration_s=duration,
+                start_ts=prev.start_ts,
+                end_ts=s.end_ts,
+                # Sum of the real dwells, not the calendar span: even a small
+                # inter-stop gap is travel, not presence.
+                duration_s=prev.duration_s + s.duration_s,
                 radius_m=max(prev.radius_m, s.radius_m),
                 start_index=prev.start_index,
                 end_index=s.end_index,

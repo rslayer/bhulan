@@ -446,7 +446,13 @@ def compute_insights(request: InsightsRequest) -> InsightsReport:
         # absence trips do — one knob, no divergent gap mechanism.
         split_gap_s=opts.trip_split_gap_minutes * 60.0,
     )
-    stops = merge_nearby_stops(raw_stops, merge_radius_m=opts.merge_stops_within_m)
+    stops = merge_nearby_stops(
+        raw_stops,
+        merge_radius_m=opts.merge_stops_within_m,
+        # Same real-world-absence gap detect_stops split on, so merge can't
+        # recombine what detect_stops correctly kept apart. One knob.
+        split_gap_s=opts.trip_split_gap_minutes * 60.0,
+    )
 
     # Trips use the already-detected stops as split candidates so we
     # don't re-cluster the same points.
