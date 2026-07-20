@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import io
 from datetime import datetime, timezone
-from typing import Iterable, List, Optional
+from typing import Dict, Iterable, List, Optional
 from xml.etree.ElementTree import Element, fromstring
 from xml.etree.ElementTree import ParseError as XmlParseError
 
@@ -131,15 +131,29 @@ def parse_kml_bytes(data: bytes) -> List[PointIn]:
         if coords_el is not None and coords_el.text:
             _extend_from_coord_string(points, coords_el.text, None)
 
-    # 2) <Point><coordinates>lon,lat</coordinates></Point>
-    for elem in _iter_elems(root, "Point"):
-        coords_el = _find_child(elem, "coordinates")
-        if coords_el is None or not coords_el.text:
-            continue
-        # Look for a sibling <TimeStamp><when> or <TimeSpan><begin>.
-        parent = elem.getparent() if hasattr(elem, "getparent") else None
-        ts = _nearest_timestamp(root, elem) if parent is None else _nearest_timestamp(parent, elem)
-        _extend_from_coord_string(points, coords_el.text, ts)
+    # 2) <Point><coordinates>lon,lat</coordinates></Point>, dated from the
+    #    enclosing <Placemark>'s <TimeStamp><when> / <TimeSpan><begin>.
+    #    Resolve each Point's Placemark through a single parent map built once,
+    #    rather than rescanning the whole document per Point (the old O(n^2)
+    #    path — see _build_parent_map). Timestamps are cached per Placemark so a
+    #    Placemark holding many Points still costs one scan.
+    point_elems = list(_iter_elems(root, "Point"))
+    if point_elems:
+        parent_map = _build_parent_map(root)
+        pm_ts_cache: Dict[int, Optional[datetime]] = {}
+        for elem in point_elems:
+            coords_el = _find_child(elem, "coordinates")
+            if coords_el is None or not coords_el.text:
+                continue
+            pm = _enclosing_placemark(elem, parent_map)
+            if pm is None:
+                ts: Optional[datetime] = None
+            else:
+                pm_key = id(pm)
+                if pm_key not in pm_ts_cache:
+                    pm_ts_cache[pm_key] = _placemark_timestamp(pm)
+                ts = pm_ts_cache[pm_key]
+            _extend_from_coord_string(points, coords_el.text, ts)
 
     # 3) <gx:Track>: interleaved <when>...</when> and <gx:coord>...</gx:coord>
     for track in _iter_elems(root, "Track", ns_prefixes=("gx",)):
@@ -221,34 +235,41 @@ def _find_child(parent: Element, local_name: str) -> Optional[Element]:
     return None
 
 
-def _nearest_timestamp(
-    root: Element, target: Element
-) -> Optional[datetime]:
-    """Return the timestamp inside the Placemark containing ``target``, if any.
+def _build_parent_map(root: Element) -> Dict[int, Element]:
+    """Map every element (by ``id``) to its parent, in a single pass.
 
-    Walks up to the enclosing ``<Placemark>`` and scans for a
-    ``<TimeStamp><when>`` or ``<TimeSpan><begin>`` child. Returns ``None``
-    when the shape doesn't have a timestamp — the downstream analytics
-    handle undated points gracefully.
+    ``xml.etree.ElementTree`` elements carry no parent pointer, so resolving a
+    ``<Point>``'s enclosing ``<Placemark>`` otherwise means rescanning the whole
+    document per Point — the O(n^2) blow-up that let an ordinary "saved places"
+    KML export (one dated ``<Placemark><Point>`` each) tie up a worker for
+    minutes. Building this once makes each lookup O(depth), i.e. O(n) overall.
+    Keys are ``id(elem)`` rather than the elements themselves so this never
+    depends on Element hashing/equality semantics.
     """
-    # ElementTree doesn't expose parent pointers, so we walk the tree looking
-    # for a Placemark that contains `target`. That's O(n) but these docs are
-    # small (dozens to hundreds of placemarks in practice).
-    for pm in _iter_elems(root, "Placemark"):
-        if _contains(pm, target):
-            for when in _iter_elems(pm, "when"):
-                return _parse_ts(when.text) if when.text else None
-            for begin in _iter_elems(pm, "begin"):
-                return _parse_ts(begin.text) if begin.text else None
-            return None
+    return {id(child): parent for parent in root.iter() for child in parent}
+
+
+def _enclosing_placemark(elem: Element, parent_map: Dict[int, Element]) -> Optional[Element]:
+    """Nearest ``<Placemark>`` ancestor of ``elem`` via ``parent_map``, if any."""
+    cur = parent_map.get(id(elem))
+    while cur is not None:
+        if _local(cur.tag) == "Placemark":
+            return cur
+        cur = parent_map.get(id(cur))
     return None
 
 
-def _contains(ancestor: Element, descendant: Element) -> bool:
-    for e in ancestor.iter():
-        if e is descendant:
-            return True
-    return False
+def _placemark_timestamp(pm: Element) -> Optional[datetime]:
+    """Timestamp for a ``<Placemark>``: first ``<when>``, else ``<begin>``.
+
+    Same resolution order as the previous per-Point scan; the analytics handle
+    undated points gracefully, so ``None`` is fine when neither is present.
+    """
+    for when in _iter_elems(pm, "when"):
+        return _parse_ts(when.text) if when.text else None
+    for begin in _iter_elems(pm, "begin"):
+        return _parse_ts(begin.text) if begin.text else None
+    return None
 
 
 def parse_fit_bytes(data: bytes) -> List[PointIn]:
