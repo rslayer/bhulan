@@ -28,6 +28,12 @@ from bhulan.analytics.mobility import TrackSample
 
 DEFAULT_RADIUS_M = 50.0
 DEFAULT_MIN_DURATION_S = 300.0  # 5 minutes — general-audience default
+# A gap between consecutive samples longer than this ends the current stop:
+# the device was off or the data is missing, so the two sides are distinct
+# real-world visits, not one continuous dwell. Mirrors
+# ``trips.DEFAULT_TRIP_SPLIT_GAP_S`` (kept numerically in sync, but defined
+# here to avoid a circular import — trips imports :class:`Stop`).
+DEFAULT_SPLIT_GAP_S = 60 * 60.0  # 60 minutes
 
 
 @dataclass(frozen=True)
@@ -52,11 +58,21 @@ def _cluster_radius_m(xs: np.ndarray, ys: np.ndarray) -> float:
     return float(np.max(d)) if d.size else 0.0
 
 
-def _cluster_end(xs: np.ndarray, ys: np.ndarray, i: int, n: int, radius_m: float) -> int:
+def _cluster_end(
+    xs: np.ndarray,
+    ys: np.ndarray,
+    ts: Sequence[datetime],
+    i: int,
+    n: int,
+    radius_m: float,
+    split_gap_s: float,
+) -> int:
     """
     Largest ``end >= i`` such that the window ``[i..end]`` has centroid-spread
-    ``<= radius_m``, growing one sample at a time and stopping at the first
-    sample that would push the spread over ``radius_m``.
+    ``<= radius_m`` *and* no gap between consecutive samples reaches
+    ``split_gap_s``, growing one sample at a time and stopping at the first
+    sample that would push the spread over ``radius_m`` or that sits across a
+    real-world absence.
 
     Equivalent to calling :func:`_cluster_radius_m` on every prefix window, but
     avoids the O(k^2) blow-up on a long single cluster: it maintains a running
@@ -65,6 +81,11 @@ def _cluster_end(xs: np.ndarray, ys: np.ndarray, i: int, n: int, radius_m: float
     *extend* is only taken when the spread is provably (bound) or exactly
     ``<= radius_m``, and a *break* only when the exact spread exceeds it, the
     result is identical to the naive per-step recompute.
+
+    The gap check mirrors :func:`bhulan.analytics.trips._trip_bounds`: a device
+    parked at a spot, switched off for a week, then parked at the *same* spot
+    again would otherwise cluster into one stop spanning the whole calendar
+    gap. Splitting on ``split_gap_s`` reports the two distinct visits instead.
     """
     sx = float(xs[i])
     sy = float(ys[i])
@@ -72,6 +93,10 @@ def _cluster_end(xs: np.ndarray, ys: np.ndarray, i: int, n: int, radius_m: float
     r_est = 0.0
     j = i
     while j + 1 < n:
+        a = ts[j]
+        b = ts[j + 1]
+        if a is not None and b is not None and (b - a).total_seconds() >= split_gap_s:
+            return j  # a real-world absence ends the cluster at j
         x = float(xs[j + 1])
         y = float(ys[j + 1])
         cox, coy = sx / m, sy / m
@@ -97,6 +122,7 @@ def detect_stops(
     points: Sequence[TrackSample],
     radius_m: float = DEFAULT_RADIUS_M,
     min_duration_s: float = DEFAULT_MIN_DURATION_S,
+    split_gap_s: float = DEFAULT_SPLIT_GAP_S,
 ) -> List[Stop]:
     """
     Return chronologically ordered stops found in the track.
@@ -109,6 +135,11 @@ def detect_stops(
             you're not sure the input is sorted/deduped.
         radius_m: Maximum spread of the samples making up a stop, in meters.
         min_duration_s: Minimum duration for a cluster to count as a stop.
+        split_gap_s: A gap between consecutive samples of at least this many
+            seconds ends the current stop, so two visits to the same place
+            separated by a real-world absence are reported as two stops rather
+            than one stop spanning the calendar gap. Reuses the split-on-gap
+            approach of :func:`bhulan.analytics.trips._trip_bounds`.
     """
     ts_points: List[TrackSample] = [p for p in points if p.ts_utc is not None]
     n = len(ts_points)
@@ -118,11 +149,12 @@ def detect_stops(
     lats = [p.lat for p in ts_points]
     lons = [p.lon for p in ts_points]
     xs, ys = latlon_to_xy_m(lats, lons)
+    ts = [p.ts_utc for p in ts_points]
 
     stops: List[Stop] = []
     i = 0
     while i < n:
-        end = _cluster_end(xs, ys, i, n, radius_m)
+        end = _cluster_end(xs, ys, ts, i, n, radius_m, split_gap_s)
         if end > i:
             duration = (
                 ts_points[end].ts_utc - ts_points[i].ts_utc  # type: ignore[union-attr, operator]

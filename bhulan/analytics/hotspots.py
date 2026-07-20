@@ -35,6 +35,11 @@ from bhulan.analytics.mobility import TrackSample
 DEFAULT_HOTSPOT_GRID_M = 100.0
 DEFAULT_HOTSPOT_MIN_SAMPLES = 5
 DEFAULT_HOTSPOT_MAX_RESULTS = 10
+# A gap between consecutive same-cell samples of at least this many seconds
+# separates two distinct visits: the device was off or the data is missing,
+# not one continuous dwell. Mirrors ``trips.DEFAULT_TRIP_SPLIT_GAP_S`` and
+# ``stops.DEFAULT_SPLIT_GAP_S`` (kept numerically in sync).
+DEFAULT_HOTSPOT_SPLIT_GAP_S = 60 * 60.0  # 60 minutes
 
 
 @dataclass(frozen=True)
@@ -104,24 +109,42 @@ def _cluster_cells(
     return clusters
 
 
-def _visit_count(sorted_indices: Sequence[int]) -> int:
-    """Count distinct runs of consecutive indices in a sorted sequence.
+def _visit_count(
+    sorted_indices: Sequence[int],
+    points: Sequence[TrackSample],
+    split_gap_s: float,
+) -> int:
+    """Count distinct visits to a cluster in a sorted index sequence.
 
     ``[0, 1, 2, 10, 11, 50]`` → 3 visits. Single-index visits are still
     visits; this is what the UX wants ("visited this cell on 3 separate
     occasions").
+
+    A new visit also starts when the elapsed time between two otherwise
+    array-adjacent samples reaches ``split_gap_s`` — the device was off or
+    the data is missing, so a return to the same cell after a real-world
+    absence is a genuine revisit, not one continuous dwell. Mirrors the
+    split-on-gap logic of :func:`bhulan.analytics.trips._trip_bounds`.
     """
     visits = 0
     prev: Optional[int] = None
     for i in sorted_indices:
-        if prev is None or i != prev + 1:
+        new_visit = prev is None or i != prev + 1
+        if not new_visit:
+            a = points[prev].ts_utc  # type: ignore[index]
+            b = points[i].ts_utc
+            if a is not None and b is not None and (b - a).total_seconds() >= split_gap_s:
+                new_visit = True
+        if new_visit:
             visits += 1
         prev = i
     return visits
 
 
 def _time_spent_s(
-    sorted_indices: Sequence[int], points: Sequence[TrackSample]
+    sorted_indices: Sequence[int],
+    points: Sequence[TrackSample],
+    split_gap_s: float,
 ) -> Optional[float]:
     """Sum inter-sample durations inside a cluster. ``None`` if no
     timestamps are available.
@@ -130,6 +153,11 @@ def _time_spent_s(
     otherwise the last sample of a cluster would bleed its ``dt`` into
     the next (often far-away) non-cluster sample, over-counting by hours
     on multi-day pooled compare inputs.
+
+    A pair whose ``dt`` reaches ``split_gap_s`` is a real-world absence
+    between two distinct visits, not dwell time, so it is excluded — this
+    is what keeps two 9-minute visits a week apart from reporting a
+    week-long ``time_spent_s``.
     """
     index_set = set(sorted_indices)
     total = 0.0
@@ -143,6 +171,8 @@ def _time_spent_s(
             continue
         saw_ts = True
         dt = (b - a).total_seconds()
+        if dt >= split_gap_s:
+            continue  # absence between visits, not dwell time
         if dt > 0:
             total += dt
     return total if saw_ts else None
@@ -153,6 +183,7 @@ def detect_hotspots(
     grid_m: float = DEFAULT_HOTSPOT_GRID_M,
     min_samples: int = DEFAULT_HOTSPOT_MIN_SAMPLES,
     max_results: int = DEFAULT_HOTSPOT_MAX_RESULTS,
+    split_gap_s: float = DEFAULT_HOTSPOT_SPLIT_GAP_S,
 ) -> List[Hotspot]:
     """Return the top-``max_results`` hotspot clusters, largest first.
 
@@ -160,6 +191,12 @@ def detect_hotspots(
     city-scale tracks (a typical lane change won't create a new hotspot,
     a different building will). ``min_samples`` suppresses noise; with
     1-Hz GPS it's comfortable to require 5 samples (≈5 s dwell).
+
+    ``split_gap_s`` makes visit counting and dwell time gap-aware: a return
+    to the same cell after an absence of at least this many seconds is a new
+    visit, and the intervening gap is excluded from ``time_spent_s``. This
+    reuses the split-on-gap approach of
+    :func:`bhulan.analytics.trips._trip_bounds`.
     """
     n = len(points)
     if n == 0:
@@ -191,10 +228,10 @@ def detect_hotspots(
                 lat=centroid_lat,
                 lon=centroid_lon,
                 sample_count=len(idxs),
-                time_spent_s=_time_spent_s(idxs, points),
+                time_spent_s=_time_spent_s(idxs, points, split_gap_s),
                 first_ts=first_ts,
                 last_ts=last_ts,
-                visit_count=_visit_count(idxs),
+                visit_count=_visit_count(idxs, points, split_gap_s),
             )
         )
 
@@ -214,6 +251,7 @@ __all__ = [
     "DEFAULT_HOTSPOT_GRID_M",
     "DEFAULT_HOTSPOT_MIN_SAMPLES",
     "DEFAULT_HOTSPOT_MAX_RESULTS",
+    "DEFAULT_HOTSPOT_SPLIT_GAP_S",
     "Hotspot",
     "detect_hotspots",
 ]

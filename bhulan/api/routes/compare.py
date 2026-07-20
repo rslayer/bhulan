@@ -209,6 +209,9 @@ async def compare_endpoint(
         grid_m=payload.options.hotspot_grid_m,
         min_samples=payload.options.hotspot_min_samples,
         max_results=payload.options.hotspot_max_results,
+        # Same gap setting as the per-track path so pooled visits recorded
+        # days apart at the same spot count as distinct visits.
+        split_gap_s=payload.options.trip_split_gap_minutes * 60.0,
     )
     shared_out = [_hotspot_to_out(h) for h in shared]
 
