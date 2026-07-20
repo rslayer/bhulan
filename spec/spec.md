@@ -5,90 +5,92 @@
 > The loop NEVER merges to master and NEVER deploys — you do. bhulan is a public
 > demo; keep it PR-gated.
 
-**Status:** cycle 6
-**Cycle of last revision:** 6
+**Status:** cycle 7
+**Cycle of last revision:** 7
 
 ---
 
 ## 1. This cycle's single outcome
 
-**Make `bounding_box` return the true minimal-longitude-span box for any number
-of clusters**, so `summary.bbox` is never wider than the track actually warrants.
+**Make `merge_nearby_stops` transitive over a chain of consecutive
+pairwise-close stops**, so the merge no longer under-merges as an artifact of
+scan order.
 
-Cycle 4 made `bounding_box` antimeridian-aware with a **two-candidate** heuristic:
-it compares the raw `[min, max]` framing against a single shifted-at-0 framing
-and takes the tighter. That handles one cluster straddling ±180°, but it only
-ever considers **two** of the possible circular cuts. For a track that visits
-**3+ genuinely spread-out longitudes**, the true minimal box is obtained by
-cutting at the **single largest angular gap** between adjacent longitudes (the
-box spans the *complement* of that gap). The two-candidate heuristic misses this,
-so `summary.bbox` can be reported up to ~80° (~8,900 km) wider than minimal, yet
-is documented as "the minimal box." A map client that fits to this bbox zooms
-out far more than the data requires.
-
-Reachable unauthenticated via ordinary `POST /v1/insights` input — any real
-track visiting three or more distant longitudes, no antimeridian jitter needed.
+`bhulan/analytics/stops.py::merge_nearby_stops` decides whether to fold each
+incoming stop `s` into the run by comparing it against `prev = merged[-1]` — the
+**already-merged blob's drifted centroid** — instead of the original stop that
+immediately preceded `s`. Concrete failure: three co-linear stops A, B, C, each
+40 m from its immediate neighbour, with `merge_radius_m = 45` and no time gap.
+A+B merge into a blob centred ~20 m from both; C is then compared against that
+drifted centroid (~60 m away, outside the radius) rather than against B (40 m
+away, inside it), so C is left out — the endpoint returns **2 stops instead of
+1**. The docstring promises "merge consecutive stops whose centroids are within
+`merge_radius_m`", so this is a contract violation, and the returned stop count /
+dwell durations are silently wrong. Reachable unauthenticated via `/v1/insights`
+with the documented `merge_stops_within_m` option and an ordinary GPS-jitter
+trail (e.g. a walk along a building perimeter).
 
 Acceptance test (already on master, currently red):
-`tests/adversary/test_bounding_box_not_minimal_multi_cluster.py`
-(`test_bounding_box_is_not_actually_minimal_for_three_plus_clusters`,
-`test_insights_bbox_endpoint_is_not_minimal_for_three_plus_clusters`).
+`tests/adversary/test_merge_nearby_stops_chain_drift_undermerges.py::test_chain_of_pairwise_close_stops_fully_merges`.
 
 ## 2. Hard constraints
 
 - **The named test is the acceptance test** — it already exists and is failing.
   Fix the product code; do NOT weaken it.
-- **Fix at the root, in `geodesy.py::bounding_box`.** Replace the two-candidate
-  longitude heuristic with the **largest-gap** algorithm: sort the longitudes,
-  compute the angular gaps between each adjacent pair *and* the wraparound gap
-  (from the max back to the min, i.e. `min + 360 - max`); the largest gap is the
-  part of the circle the track does *not* occupy, so the minimal box spans from
-  the longitude just after that gap, eastward, to the longitude just before it.
-  This subsumes the cycle-4 two-cluster case as a special case.
-- **Keep the `min_lon > max_lon` = crosses-antimeridian convention** from ADR
-  0004 unchanged; the largest-gap box uses the same encoding when it wraps.
-- **Latitude is unaffected** — plain `min`/`max` as today.
-- **Byte-identical for non-wraparound tracks.** When the largest gap is the
-  wraparound gap (the common case — all points within a <180° arc that doesn't
-  cross ±180°), the result must be exactly the naive `min_lon`/`max_lon` as
-  before. Verify byte-identity over random non-wraparound tracks.
-- **Do NOT regress cycles 4–5** — the antimeridian projection, centroid, and the
-  single-cluster straddle bbox tests must all stay green. Do NOT touch
-  `haversine_m`, `latlon_to_xy_m`, or `circular_mean_lon`.
+- **Fix the comparison basis.** The merge decision for `s` must be made against
+  the **immediately preceding original stop**, not the drifted merged blob, so a
+  chain where every adjacent original pair is within `merge_radius_m` collapses
+  fully (single-linkage over consecutive stops). Track the previous *original*
+  stop separately from the accumulating blob.
+- **Preserve gap-awareness (cycle 2).** Two stops close in space but separated by
+  a real-world absence of ≥ `split_gap_s` remain two stops. The time-gap check
+  must still use the boundary between the two *original* consecutive stops.
+- **Keep the accumulation correct.** The merged stop's `duration_s` stays the sum
+  of the real per-stop dwells (never the calendar span); its centroid must land
+  inside the merged cluster (reuse `circular_mean_lon` for longitude, from cycle
+  5, so a chain straddling ±180° still centres correctly); `start_index` /
+  `end_index` / `sample_count` span all merged members.
+- **No regression for the non-chain case.** Any sequence where no third stop
+  chains onto an already-merged blob (in particular every two-stop merge) must
+  produce **byte-identical** output to today — the comparison basis only differs
+  once a blob has formed.
+- **Do NOT regress cycles 1–6** — gap-aware detect/merge, KML O(n), antimeridian
+  projection/centroid, largest-gap bbox all stay green. Do NOT touch
+  `haversine_m`, `latlon_to_xy_m`, `bounding_box`, or `circular_mean_lon`.
 - Backend/analytics only. No new dependencies, no API-shape changes, no
   DB/schema changes.
 
 ## 3. Non-negotiable acceptance criteria
 
-- **AC1:** for points forming 3+ separated longitude clusters, `bounding_box`
-  returns the minimal-span box (the complement of the largest angular gap), not
-  a wider superset.
-- **AC2:** `/v1/insights` `summary.bbox` reflects the same minimal box for such a
-  track.
-- **AC3:** the cycle-4 single-cluster antimeridian bbox behaviour is unchanged
-  (a tight dwell straddling ±180° still reports its true small crossing box).
-- **AC4:** every non-wraparound track produces a byte-identical bbox to before.
-- **AC5:** `poetry run pytest tests/unit/ tests/adversary/test_bounding_box_not_minimal_multi_cluster.py tests/adversary/test_antimeridian_projection_breaks_stops_and_bbox.py tests/adversary/test_antimeridian_centroid_reports_wrong_location.py -q` is green.
+- **AC1:** three consecutive stops A, B, C with every adjacent pair within
+  `merge_radius_m` and no disqualifying time gap merge into **one** stop.
+- **AC2:** the merged stop's `duration_s` is the sum of the three real dwells and
+  its centroid lies within the cluster (within ~`merge_radius_m` of each member).
+- **AC3:** a chain broken by a ≥ `split_gap_s` gap between two members does NOT
+  merge across that gap (gap-awareness intact).
+- **AC4:** every input that does not chain a third stop onto a merged blob
+  (including all two-stop merges) yields byte-identical output to before.
+- **AC5:** `poetry run pytest tests/unit/ tests/adversary/test_merge_nearby_stops_chain_drift_undermerges.py tests/adversary/test_antimeridian_centroid_reports_wrong_location.py tests/adversary/test_bounding_box_not_minimal_multi_cluster.py -q` is green.
 
 ## 4. Known traps for the adversary to probe next (backlog)
 
-Still red on master (from earlier sweeps / harvested cycle-7 findings):
-
-- **merge_nearby_stops chain-drift** (`test_merge_nearby_stops_chain_drift_undermerges.py`):
-  compares each stop against the drifted merge result, not the original
-  preceding stop → order-dependent under-merge.
+- **Runaway chain over-merge:** now that the merge is transitive, does an
+  unbounded chain of stops each just within `merge_radius_m` collapse into one
+  implausibly wide "stop"? Probe whether a span cap or total-extent guard is
+  warranted (the time-gap split is the only current bound).
 - **Polar dwell false-negative** (`test_pole_dwell_stop_false_negative.py`):
-  the global `meters_per_deg_lon` overstates a tight polar dwell's spread ~57%.
+  global `meters_per_deg_lon` overstates a tight polar dwell's spread ~57%.
 - Deeply-nested-JSON recursion → 500; non-finite reported `speed_mps`;
   datetime-overflow / malformed-type from the original robustness sweep.
 
 ## 5. Definition of done for this cycle
 
-- AC1–AC5 pass. `bounding_box` is truly minimal via the largest-gap cut;
-  non-wraparound output byte-identical; cycles 4–5 untouched and green.
-- ADR recorded in `spec/adrs/` (document the largest-gap minimal-box algorithm,
-  superseding the two-candidate note in ADR 0004).
-- A PR is opened for review. **No merge to `master` without your review.**
+- AC1–AC5 pass. The merge is transitive over consecutive pairwise-close stops via
+  comparison to the original preceding stop; gap-awareness and accumulation
+  correct; non-chain output byte-identical; cycles 1–6 green.
+- ADR recorded in `spec/adrs/` (document single-linkage-over-consecutive-stops
+  and why the comparison basis is the original preceding stop).
+- A PR is opened for review.
 
 ## 6. Deploy target
 
