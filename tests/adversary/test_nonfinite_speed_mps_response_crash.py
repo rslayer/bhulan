@@ -38,12 +38,22 @@ import math
 
 from fastapi.testclient import TestClient
 
-# Values that must not reach the JSON encoder as a non-finite float:
+# Values that must not reach the JSON encoder as a non-finite float, as the raw
+# JSON number literals a real client sends (the server parses each with the
+# stdlib decoder, so ``1e400`` becomes ``inf`` server-side):
 #   1e400  -> parsed as inf outright
 #   1e308  -> finite on input, but 1e308 * 3.6 overflows to inf
 #   5e307  -> just past the overflow threshold
 #   2e7    -> finite and serializable, but beyond MAX_SPEED_MPS (implausible)
-_BAD_SPEEDS = [1e400, 1e308, 5e307, 2e7]
+# They are sent as raw request bytes rather than via ``json=`` because a strict
+# httpx encoder (``allow_nan=False``) refuses to serialize ``inf`` client-side,
+# which would fail the test before it ever reached the server — a harness quirk,
+# not the behaviour under test.
+_BAD_SPEEDS = ["1e400", "1e308", "5e307", "2e7"]
+
+
+def _post_raw(client: TestClient, url: str, body: str):
+    return client.post(url, content=body.encode(), headers={"content-type": "application/json"})
 
 
 def _assert_finite_numbers(obj, ctx: str) -> None:
@@ -60,52 +70,51 @@ def _assert_finite_numbers(obj, ctx: str) -> None:
 
 def test_insights_implausible_speed_is_ignored_not_rejected(client: TestClient):
     for speed in _BAD_SPEEDS:
-        r = client.post(
+        r = _post_raw(
+            client,
             "/v1/insights",
-            json={"points": [{"lat": 1.0, "lon": 1.0, "speed_mps": speed}]},
+            '{"points": [{"lat": 1.0, "lon": 1.0, "speed_mps": %s}]}' % speed,
         )
         assert r.status_code == 200, (
-            f"speed_mps={speed!r} on /v1/insights should be ignored (200), "
+            f"speed_mps={speed} on /v1/insights should be ignored (200), "
             f"got {r.status_code}: {r.text[:200]}"
         )
-        _assert_finite_numbers(r.json(), f"/v1/insights speed_mps={speed!r}")
+        _assert_finite_numbers(r.json(), f"/v1/insights speed_mps={speed}")
 
 
 def test_plot_validate_implausible_speed_is_dropped(client: TestClient):
     for speed in _BAD_SPEEDS:
-        r = client.post(
+        r = _post_raw(
+            client,
             "/v1/plot/validate",
-            json={"points": [{"lat": 1.0, "lon": 1.0, "speed_mps": speed}]},
+            '{"points": [{"lat": 1.0, "lon": 1.0, "speed_mps": %s}]}' % speed,
         )
         assert r.status_code == 200, (
-            f"speed_mps={speed!r} on /v1/plot/validate should be ignored (200), "
+            f"speed_mps={speed} on /v1/plot/validate should be ignored (200), "
             f"got {r.status_code}: {r.text[:200]}"
         )
         body = r.json()
-        _assert_finite_numbers(body, f"/v1/plot/validate speed_mps={speed!r}")
+        _assert_finite_numbers(body, f"/v1/plot/validate speed_mps={speed}")
         # The point itself survives; only the bad speed is dropped.
         assert body["points"][0]["speed_mps"] is None, (
-            f"expected implausible speed_mps={speed!r} to be dropped to null, "
+            f"expected implausible speed_mps={speed} to be dropped to null, "
             f"got {body['points'][0]['speed_mps']!r}"
         )
 
 
 def test_compare_implausible_speed_is_ignored(client: TestClient):
     for speed in _BAD_SPEEDS:
-        r = client.post(
+        r = _post_raw(
+            client,
             "/v1/compare",
-            json={
-                "tracks": [
-                    {"points": [{"lat": 1.0, "lon": 1.0, "speed_mps": speed}]},
-                    {"points": [{"lat": 2.0, "lon": 2.0}]},
-                ]
-            },
+            '{"tracks": [{"points": [{"lat": 1.0, "lon": 1.0, "speed_mps": %s}]}, '
+            '{"points": [{"lat": 2.0, "lon": 2.0}]}]}' % speed,
         )
         assert r.status_code == 200, (
-            f"speed_mps={speed!r} on /v1/compare should be ignored (200), "
+            f"speed_mps={speed} on /v1/compare should be ignored (200), "
             f"got {r.status_code}: {r.text[:200]}"
         )
-        _assert_finite_numbers(r.json(), f"/v1/compare speed_mps={speed!r}")
+        _assert_finite_numbers(r.json(), f"/v1/compare speed_mps={speed}")
 
 
 def test_insights_text_path_implausible_speed_is_clean(client: TestClient):
@@ -129,14 +138,12 @@ def test_analytics_still_derive_speed_when_reported_speed_is_dropped(
     With ``speed_mps`` ignored, the pipeline falls back to distance/time the
     same way it does for points that never carried a speed at all.
     """
-    r = client.post(
+    r = _post_raw(
+        client,
         "/v1/insights",
-        json={
-            "points": [
-                {"lat": 1.0, "lon": 1.0, "ts_utc": "2025-01-01T00:00:00Z", "speed_mps": 1e400},
-                {"lat": 1.001, "lon": 1.001, "ts_utc": "2025-01-01T00:00:10Z", "speed_mps": 1e400},
-            ]
-        },
+        '{"points": ['
+        '{"lat": 1.0, "lon": 1.0, "ts_utc": "2025-01-01T00:00:00Z", "speed_mps": 1e400}, '
+        '{"lat": 1.001, "lon": 1.001, "ts_utc": "2025-01-01T00:00:10Z", "speed_mps": 1e400}]}',
     )
     assert r.status_code == 200, r.text[:200]
     summary = r.json()["summary"]
