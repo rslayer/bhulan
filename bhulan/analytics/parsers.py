@@ -71,6 +71,45 @@ def _max_json_nesting_depth(text: str) -> int:
     return max_depth
 
 
+def json_nesting_exceeds(text: str, max_depth: int) -> bool:
+    """Return ``True`` as soon as ``[``/``{`` nesting in ``text`` exceeds
+    ``max_depth`` — a bounded, early-exiting variant of
+    :func:`_max_json_nesting_depth`.
+
+    It stops the instant the running depth passes ``max_depth`` (cheap: a
+    deep-nesting attack payload is tiny, so this returns after ~``max_depth``
+    characters) and never needs the true maximum. Callers that face a large but
+    shallow legitimate body should pass only a bounded prefix of it (a shallow
+    body never trips ``max_depth`` no matter how long, so scanning it in full is
+    wasted work — and a body that pads shallow content past the prefix before
+    nesting deep still fails safely downstream, where the JSON decoder's own
+    ``RecursionError`` surfaces as a clean 4xx). Brackets inside JSON string
+    literals are ignored.
+    """
+    depth = 0
+    in_string = False
+    escaped = False
+    for ch in text:
+        if in_string:
+            if escaped:
+                escaped = False
+            elif ch == "\\":
+                escaped = True
+            elif ch == '"':
+                in_string = False
+            continue
+        if ch == '"':
+            in_string = True
+        elif ch == "[" or ch == "{":
+            depth += 1
+            if depth > max_depth:
+                return True
+        elif ch == "]" or ch == "}":
+            if depth > 0:
+                depth -= 1
+    return False
+
+
 def _loads_untrusted(text: str, max_depth: int = MAX_JSON_NESTING_DEPTH) -> Any:
     """``json.loads`` for untrusted text, guarded against deep-nesting crashes.
 

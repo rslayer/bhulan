@@ -19,6 +19,7 @@ from fastapi.staticfiles import StaticFiles
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
+from bhulan.analytics.parsers import MAX_JSON_NESTING_DEPTH, json_nesting_exceeds
 from bhulan.api.limiter import limiter
 from bhulan.api.routes.auth import router as auth_router
 from bhulan.api.routes.compare import router as compare_router
@@ -41,6 +42,86 @@ app = FastAPI(
 )
 
 
+# Reject a deeply-nested JSON body with a uniform 422 before it reaches the
+# parser. Only the first slice is scanned: the attack payload is a few KB, and a
+# legitimate large body is shallow (see the guard docstring / ADR 0015).
+_JSON_DEPTH_SCAN_LIMIT_BYTES = 64 * 1024
+
+
+class _JSONBodyDepthGuardMiddleware:
+    """Return a clean 422 for a JSON request body nested past
+    ``MAX_JSON_NESTING_DEPTH``, *before* the JSON parser recurses on it.
+
+    A tiny ``{"points": [[[…]]]}`` body would otherwise make the stdlib json
+    decoder raise ``RecursionError`` while parsing the request body, which
+    Starlette surfaces as a generic 400 — inconsistent with the 422
+    ``too_deeply_nested`` the ``RequestValidationError`` handler already returns
+    for shallower (but still over-limit) bodies. Scanning only the first
+    ``_JSON_DEPTH_SCAN_LIMIT_BYTES`` of the raw body for bracket nesting (the
+    attack payload is a few KB; a legitimate large body is shallow, so its
+    prefix never trips the limit) makes every over-deep body get the same clean
+    422. Registered *inside* the CORS layer so the 422 still carries CORS
+    headers. A body that pads shallow content past the scan limit before nesting
+    deep still fails safely downstream (the decoder's own ``RecursionError`` →
+    clean 4xx). See ADR 0015.
+    """
+
+    def __init__(self, app: Any) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Any, receive: Any, send: Any) -> None:
+        if scope["type"] != "http" or scope.get("method") not in ("POST", "PUT", "PATCH"):
+            await self.app(scope, receive, send)
+            return
+
+        content_type = b""
+        for key, value in scope.get("headers", []):
+            if key == b"content-type":
+                content_type = value
+                break
+        if b"application/json" not in content_type.lower():
+            await self.app(scope, receive, send)
+            return
+
+        chunks: List[bytes] = []
+        more_body = True
+        while more_body:
+            message = await receive()
+            if message["type"] == "http.request":
+                chunks.append(message.get("body", b""))
+                more_body = message.get("more_body", False)
+            elif message["type"] == "http.disconnect":
+                more_body = False
+        body = b"".join(chunks)
+
+        prefix = body[:_JSON_DEPTH_SCAN_LIMIT_BYTES].decode("utf-8", "ignore")
+        if json_nesting_exceeds(prefix, MAX_JSON_NESTING_DEPTH):
+            response = JSONResponse(
+                status_code=422,
+                content={
+                    "detail": [
+                        {
+                            "type": "too_deeply_nested",
+                            "msg": "Request body is too deeply nested to process.",
+                        }
+                    ]
+                },
+            )
+            await response(scope, receive, send)
+            return
+
+        replayed = False
+
+        async def replay() -> Dict[str, Any]:
+            nonlocal replayed
+            if not replayed:
+                replayed = True
+                return {"type": "http.request", "body": body, "more_body": False}
+            return {"type": "http.request", "body": b"", "more_body": False}
+
+        await self.app(scope, replay, send)
+
+
 def _parse_origins(raw: str) -> List[str]:
     """Parse a comma-separated CORS allowlist; '*' stays as a single wildcard."""
     raw = (raw or "").strip()
@@ -56,6 +137,11 @@ _cors_origins = _parse_origins(settings.ALLOWED_ORIGINS)
 # cookie-less anyway — credentials only matter for future auth additions,
 # which will ship a narrow origin list.
 _cors_allow_credentials = _cors_origins != ["*"]
+
+# Depth guard is added BEFORE CORS so that CORS ends up the outermost layer
+# (Starlette runs the last-added middleware first): a rejected 422 still carries
+# the CORS headers a browser client needs to read it.
+app.add_middleware(_JSONBodyDepthGuardMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
