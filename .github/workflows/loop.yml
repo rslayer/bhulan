@@ -410,3 +410,26 @@ jobs:
             --title "loop: cycle $N — $GATE · ${DEFECTS} findings · reach ${REACH}%" \
             --body-file /tmp/pr_body.md)"
           echo "PR: $PR_URL"
+
+          # The Build step's claude-code-action commits as claude[bot] and the
+          # Claude GitHub App opens its OWN fix-only PR on a topic branch (using
+          # the App's installation token — not this workflow's GITHUB_TOKEN, so
+          # it can't be suppressed from here). That PR is a strict subset of the
+          # canonical loop/cycle-N PR above (which also carries the adversary's
+          # new tests + triage). The reliable discriminator is the AUTHOR: the
+          # canonical PR above is github-actions[bot]; the twin is always
+          # claude[bot] (its branch name is inconsistent — sometimes loop/…,
+          # sometimes cycle-… — so we must NOT filter on branch). During a loop
+          # run the only open claude[bot] PR is this run's twin. Close it so each
+          # run leaves exactly ONE PR, and delete its branch. Never let this
+          # housekeeping fail the run.
+          set +e
+          gh pr list --state open --json number,author \
+            --jq '.[] | select((.author.login // "") | test("claude")) | .number' \
+          | while read -r TWIN; do
+              [ -n "$TWIN" ] || continue
+              gh pr close "$TWIN" --delete-branch \
+                --comment "Superseded by the canonical **$PR_URL** (loop/cycle-$N — full tree + adversary findings + triage). Auto-closed by the loop to avoid duplicate PRs."
+              echo "closed duplicate claude-code-action PR #$TWIN"
+            done
+          set -e
