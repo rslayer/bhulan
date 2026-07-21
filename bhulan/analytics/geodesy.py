@@ -172,6 +172,47 @@ def latlon_to_xy_m(
 
     lat0 = float(np.mean(lats_a))
 
+    # Near a pole the linear tangent-plane projection breaks down: longitude is
+    # degenerate (two points metres apart can differ by ~180°), and even the
+    # lat/lon-mean centroid is wrong (the centre of two points straddling the
+    # pole is the pole itself, not their lat/lon average). Both make a tight
+    # polar dwell project to a far wider spread than its true extent, so
+    # detect_stops misses it. For clusters within ~11 km of a pole, project via
+    # a proper spherical (orthographic) tangent plane about the 3D mean of the
+    # points' unit vectors. The gate (|lat0| > 89.9) never fires for ordinary
+    # tracks, so their projection stays byte-identical to the linear path below.
+    if abs(lat0) > 89.9:
+        phi = np.radians(lats_a)
+        lam = np.radians(lons_a)
+        cos_phi = np.cos(phi)
+        # 3D unit vectors on the sphere
+        px = cos_phi * np.cos(lam)
+        py = cos_phi * np.sin(lam)
+        pz = np.sin(phi)
+        # Spherical centroid = normalised mean vector (points at the pole, as it
+        # should, for a dwell symmetric about it).
+        cx, cy, cz = float(np.mean(px)), float(np.mean(py)), float(np.mean(pz))
+        cnorm = math.sqrt(cx * cx + cy * cy + cz * cz) or 1.0
+        cx, cy, cz = cx / cnorm, cy / cnorm, cz / cnorm
+        # Any orthonormal basis (u, v) of the tangent plane ⊥ c works — we only
+        # use it for distances/spread, which are rotation-invariant. Build u from
+        # whichever global axis is least parallel to c to stay well-conditioned.
+        ax, ay, az = (1.0, 0.0, 0.0) if abs(cz) > 0.9 else (0.0, 0.0, 1.0)
+        # u = normalize(a - (a·c) c)
+        adotc = ax * cx + ay * cy + az * cz
+        ux, uy, uz = ax - adotc * cx, ay - adotc * cy, az - adotc * cz
+        un = math.sqrt(ux * ux + uy * uy + uz * uz) or 1.0
+        ux, uy, uz = ux / un, uy / un, uz / un
+        # v = c × u
+        vx = cy * uz - cz * uy
+        vy = cz * ux - cx * uz
+        vz = cx * uy - cy * ux
+        # Orthographic projection onto the tangent plane, in metres. Exact for a
+        # tight cluster (spread ≪ R); a polar dwell is metres wide.
+        x = EARTH_RADIUS_M * (px * ux + py * uy + pz * uz)
+        y = EARTH_RADIUS_M * (px * vx + py * vy + pz * vz)
+        return x, y
+
     # Reference longitude. For tracks that straddle the antimeridian (±180°) the
     # arithmetic mean of the raw longitudes lands on the *antipode* (e.g. the
     # mean of 179.99 and -179.99 is 0), which would leave every point ~180° from

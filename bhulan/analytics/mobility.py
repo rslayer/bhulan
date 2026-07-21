@@ -93,6 +93,30 @@ def total_distance_m(points: Sequence[TrackSample]) -> float:
     return float(np.sum(haversine_vec_m(lats, lons)))
 
 
+def zero_time_position_change_count(points: Sequence[TrackSample]) -> int:
+    """Count consecutive samples that share a timestamp yet changed position.
+
+    Movement in *zero* elapsed time — typically a logger that batch-flushes
+    buffered fixes under one wall-clock stamp, or rounds timestamps to whole
+    seconds. The instantaneous speed is undefined for these, so the pipeline
+    surfaces a count (as a ``quality`` note) rather than silently reporting them
+    as zero-speed dwells while their distance still lands in the totals.
+    """
+    n = len(points)
+    if n < 2:
+        return 0
+    lats = [p.lat for p in points]
+    lons = [p.lon for p in points]
+    step_dist = haversine_vec_m(lats, lons)
+    count = 0
+    for i in range(n - 1):
+        a, b = points[i].ts_utc, points[i + 1].ts_utc
+        if a is not None and b is not None:
+            if (b - a).total_seconds() <= 0.0 and step_dist[i] > 1e-6:
+                count += 1
+    return count
+
+
 def time_range(points: Sequence[TrackSample]) -> Tuple[Optional[datetime], Optional[datetime]]:
     """Earliest and latest timestamp present in the track, or ``(None, None)``."""
     stamps = [p.ts_utc for p in points if p.ts_utc is not None]
@@ -163,7 +187,19 @@ def segment_by_motion(
         if p.speed_mps is not None:
             sample_speed[i] = float(p.speed_mps)
 
-    moving_mask = sample_speed >= moving_speed_mps
+    # A step that covers real distance in *zero* elapsed time (consecutive
+    # samples sharing a timestamp but differing in position — a logger
+    # batch-flushing buffered fixes with one wall-clock stamp) has an undefined
+    # instantaneous speed, so ``step_speed`` above forced it to 0. Left alone it
+    # would classify genuine movement as "stopped", producing a self-
+    # contradictory "stopped" segment carrying multiple kilometres. Force such
+    # samples to *moving* — the position demonstrably changed — even though no
+    # finite speed can be derived for them (so they don't inflate max speed).
+    zero_time_moved = np.zeros(n, dtype=bool)
+    if step_dist.size:
+        zero_time_moved[:-1] = (step_secs <= 0.0) & (step_dist > 1e-6)
+
+    moving_mask = (sample_speed >= moving_speed_mps) | zero_time_moved
 
     raw: List[Tuple[str, int, int]] = []
     start = 0
