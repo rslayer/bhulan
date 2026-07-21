@@ -3,72 +3,77 @@ Acceptance test for the merge span cap (ADR 0013): a merged stop is one place �
 points clustered within ``stop_radius_m`` of a centre — never a smear along a
 path.
 
-A long line of stops, each within ``merge_stops_within_m`` of the next but
-progressively walking away, must NOT collapse into one implausibly wide "stop".
-It splits into several stops, each bounded to one ``stop_radius_m`` disk, so a
-downstream consumer never sees a "stop" that is really a slow walk/drive.
+Exercised at the unit level against ``merge_nearby_stops`` directly. A run of
+detected stops, each within ``merge_stops_within_m`` of the next (so cycle 7's
+single-linkage would chain them all) but marching past one ``stop_radius_m`` end
+to end, must NOT collapse into one wide "stop". The cap splits the run into
+groups each bounded to one ``stop_radius_m`` disk.
 
-Reachable unauthenticated via ``POST /v1/insights`` with the documented
-``merge_stops_within_m`` option.
+(At the endpoint, a continuous progression like this is rejected by
+``detect_stops`` as movement — ADR 0014 — before the merge ever sees it; the cap
+is the defence-in-depth that bounds a chain of genuine near-neighbour stops, so
+it is verified by handing the merger the stops directly.)
 """
+
+from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from fastapi.testclient import TestClient
-
-import bhulan.storage.mongo_repo as mongo_repo  # noqa: F401  (fixture parity)
-from bhulan.analytics.geodesy import haversine_m
+from bhulan.analytics.stops import Stop, merge_nearby_stops
 
 _T0 = datetime(2024, 1, 1, tzinfo=timezone.utc)
-_LAT0, _LON = 40.0, -73.0
+_LON = -73.0
 _STOP_RADIUS_M = 50.0
-_MERGE_RADIUS_M = 45.0  # each hop is mergeable...
-_STEP_M = 40.0          # ...but the chain walks _STEP_M each time
-_N_STEPS = 8            # ~320 m end to end — far more than one stop
+_MERGE_RADIUS_M = 45.0   # each hop is mergeable (single-linkage would chain)...
+_STEP_M = 40.0           # ...but the run marches _STEP_M each time
+_N = 8                   # ~280 m end to end — far more than one stop
 _METERS_PER_DEG_LAT = 111_320.0
 
 
-def _walk_payload():
-    points = []
+def _run() -> list[Stop]:
+    stops = []
     t = _T0
     north = 0.0
-    for _ in range(_N_STEPS):
-        lat = _LAT0 + north / _METERS_PER_DEG_LAT
-        # a brief dwell at each hop so detect_stops emits a distinct stop
-        for _ in range(2):
-            points.append({"lat": lat, "lon": _LON, "ts_utc": t.isoformat()})
-            t += timedelta(seconds=60)
-        t += timedelta(seconds=1)
+    for i in range(_N):
+        lat = 40.0 + north / _METERS_PER_DEG_LAT
+        stops.append(
+            Stop(
+                lat=lat,
+                lon=_LON,
+                start_ts=t,
+                end_ts=t + timedelta(seconds=120),
+                duration_s=120.0,
+                radius_m=1.0,
+                start_index=i,
+                end_index=i,
+                sample_count=4,
+            )
+        )
+        t += timedelta(seconds=121)
         north += _STEP_M
-    return points
+    return stops
 
 
-def test_progressive_walk_splits_into_bounded_stops(client: TestClient):
-    payload = {
-        "points": _walk_payload(),
-        "options": {
-            "stop_radius_m": _STOP_RADIUS_M,
-            "min_stop_minutes": 0.5,
-            "merge_stops_within_m": _MERGE_RADIUS_M,
-        },
-    }
-    r = client.post("/v1/insights", json=payload)
-    assert r.status_code == 200
-    stops = r.json()["stops"]
-
-    total_span_m = _STEP_M * (_N_STEPS - 1)  # ~280 m
-
-    # It must NOT all merge into one stop (the whole point of the cap).
-    assert len(stops) > 1, (
-        f"a {total_span_m:.0f}m progressive walk collapsed into a single 'stop' "
-        f"despite stop_radius_m={_STOP_RADIUS_M}m — the merge is not capped"
+def test_progressive_run_splits_into_bounded_stops():
+    total_span_m = _STEP_M * (_N - 1)  # ~280 m
+    merged = merge_nearby_stops(
+        _run(), merge_radius_m=_MERGE_RADIUS_M, stop_radius_m=_STOP_RADIUS_M
     )
 
-    # Every reported stop is bounded to one stop's radius (a genuine cluster
-    # around a common centre), never a wide smear.
+    # It must NOT all merge into one stop (the whole point of the cap).
+    assert len(merged) > 1, (
+        f"a {total_span_m:.0f} m run of near-neighbour stops collapsed into a "
+        f"single 'stop' despite stop_radius_m={_STOP_RADIUS_M} m — merge not capped"
+    )
+
+    # But single-linkage still did *some* merging (fewer stops than inputs),
+    # proving the cap bounds rather than disables merging.
+    assert len(merged) < _N, "the cap must still merge near-neighbours, not disable merging"
+
+    # Every reported stop is bounded to one stop's radius.
     eps = 1e-6
-    for st in stops:
-        assert st["radius_m"] <= _STOP_RADIUS_M + eps, (
-            f"reported stop radius_m={st['radius_m']:.1f}m exceeds one "
-            f"stop_radius_m={_STOP_RADIUS_M}m (ADR 0013)"
+    for st in merged:
+        assert st.radius_m <= _STOP_RADIUS_M + eps, (
+            f"reported stop radius_m={st.radius_m:.1f} m exceeds one "
+            f"stop_radius_m={_STOP_RADIUS_M} m (ADR 0013)"
         )
