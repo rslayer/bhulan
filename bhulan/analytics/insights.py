@@ -440,6 +440,20 @@ def compute_insights(request: InsightsRequest) -> InsightsReport:
     start_ts, end_ts = mobility.time_range(prepared)
     box = mobility.bbox(prepared)
 
+    # Movement in zero elapsed time (consecutive samples sharing a timestamp but
+    # differing in position) has an undefined instantaneous speed: its distance
+    # still counts toward the totals, but it can't contribute a finite speed, so
+    # flag it rather than let the summary read as real distance at 0 km/h with no
+    # explanation. (segment_by_motion already classifies these as moving, not a
+    # self-contradictory "stopped" segment.)
+    zero_time_moves = mobility.zero_time_position_change_count(prepared)
+    if zero_time_moves > 0:
+        quality.issues.append(
+            f"{zero_time_moves} sample(s) changed position with no elapsed time "
+            "(identical timestamps); their speed is undefined and excluded from "
+            "speed stats, though their distance is still counted."
+        )
+
     try:
         raw_stops = detect_stops(
             prepared,

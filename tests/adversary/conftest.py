@@ -15,6 +15,23 @@ from fastapi.testclient import TestClient
 pytest.importorskip("fastapi")
 
 
+@pytest.fixture(autouse=True)
+def _reset_rate_limiter():
+    """Give every test a fresh per-IP rate-limit budget.
+
+    The ``slowapi`` limiter is a module singleton with in-memory storage, so
+    without this the public-endpoint limits (e.g. ``30/minute`` on
+    ``/v1/insights``) accumulate across the whole suite in one fast run and the
+    later tests get a spurious 429 rather than exercising the behaviour under
+    test. Resetting *before* each test keeps them isolated; a test that itself
+    wants to prove the limit still makes all its requests within one test.
+    """
+    from bhulan.api.limiter import limiter
+
+    limiter.reset()
+    yield
+
+
 @pytest.fixture(scope="module")
 def client():
     import bhulan.storage.mongo_repo as mongo_repo
