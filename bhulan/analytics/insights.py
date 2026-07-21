@@ -26,6 +26,8 @@ from bhulan.analytics.stops import (
     DEFAULT_MIN_DURATION_S,
     DEFAULT_RADIUS_M,
     Stop,
+    StopScanBudgetExceeded,
+    _MAX_STOP_SCAN_WORK,
     detect_stops,
     merge_nearby_stops,
 )
@@ -438,14 +440,29 @@ def compute_insights(request: InsightsRequest) -> InsightsReport:
     start_ts, end_ts = mobility.time_range(prepared)
     box = mobility.bbox(prepared)
 
-    raw_stops = detect_stops(
-        prepared,
-        radius_m=opts.stop_radius_m,
-        min_duration_s=opts.min_stop_minutes * 60.0,
-        # Reuse the trip gap setting so stops split on the same real-world
-        # absence trips do — one knob, no divergent gap mechanism.
-        split_gap_s=opts.trip_split_gap_minutes * 60.0,
-    )
+    try:
+        raw_stops = detect_stops(
+            prepared,
+            radius_m=opts.stop_radius_m,
+            min_duration_s=opts.min_stop_minutes * 60.0,
+            # Reuse the trip gap setting so stops split on the same real-world
+            # absence trips do — one knob, no divergent gap mechanism.
+            split_gap_s=opts.trip_split_gap_minutes * 60.0,
+            # Bound the scan so a pathological single giant cluster (a very slow
+            # drift, or a same-timestamp mass) can't tie up a worker — see ADR
+            # 0016. A real track does far less work than this absolute cap.
+            max_scan_work=_MAX_STOP_SCAN_WORK,
+        )
+    except StopScanBudgetExceeded:
+        # The input is too dense/degenerate for stop detection within budget.
+        # Skip stops (and therefore trips) but still return every other insight
+        # — distance, speed, bbox, hotspots — rather than hang or 500.
+        raw_stops = []
+        quality.issues.append(
+            "Stop detection skipped: the track is too dense or degenerate "
+            "(e.g. a very slow drift or many samples at one timestamp) to "
+            "analyze within the allotted budget."
+        )
     stops = merge_nearby_stops(
         raw_stops,
         merge_radius_m=opts.merge_stops_within_m,

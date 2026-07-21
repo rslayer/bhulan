@@ -19,7 +19,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 from datetime import datetime
-from typing import List, Optional, Sequence
+from typing import List, Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -34,6 +34,35 @@ DEFAULT_MIN_DURATION_S = 300.0  # 5 minutes — general-audience default
 # ``trips.DEFAULT_TRIP_SPLIT_GAP_S`` (kept numerically in sync, but defined
 # here to avoid a circular import — trips imports :class:`Stop`).
 DEFAULT_SPLIT_GAP_S = 60 * 60.0  # 60 minutes
+
+# ``detect_stops`` re-grows a spatial cluster from each starting sample whenever
+# the previous cluster was *rejected* (too short in time, or progressive
+# movement). For a real track — where dwells are accepted and the scan jumps
+# past them — that is ~O(n). But a crafted single giant cluster (a very slow
+# drift, or thousands of samples sharing one timestamp) is never accepted, so
+# the scan re-grows an O(n)-sized cluster from every sample: O(n·cluster_size),
+# which at the public 100k-point cap ties up a worker for ~70s (an
+# unauthenticated availability/DoS hole). This budget caps the total scan work
+# at a multiple of the sample count; a real track (dwells accepted, the scan
+# jumps past them → ~1× n work) stays far under it, while a pathological one is
+# bounded to a few seconds. This is an ABSOLUTE cap (not per-point): a realistic
+# track does well under a million work units regardless of size, so it is never
+# touched, while any pathological input — the slow drift, or a dense mass of
+# just-below-``min_duration`` dwells that are rejected and re-grown — is bounded
+# to ~5s of stop scanning before it degrades gracefully (no stops + a quality
+# note), rather than tying up a worker for ~70s. ``work`` counts grown samples
+# plus the window size of every exact-radius recompute (the real time driver, at
+# ~2-3M units/sec). The same-timestamp variant is additionally handled exactly
+# (a zero-duration cluster can never be a stop, so it is skipped wholesale with
+# no re-growth). See ADR 0016.
+_MAX_STOP_SCAN_WORK = 12_000_000
+
+
+class StopScanBudgetExceeded(Exception):
+    """detect_stops' scan work exceeded its budget — the input is a pathological
+    single giant cluster (a slow drift or same-timestamp mass), not a real
+    track. Callers degrade gracefully (report no stops + a quality note) rather
+    than hang."""
 
 
 @dataclass(frozen=True)
@@ -66,13 +95,16 @@ def _cluster_end(
     n: int,
     radius_m: float,
     split_gap_s: float,
-) -> int:
+) -> Tuple[int, int]:
     """
-    Largest ``end >= i`` such that the window ``[i..end]`` has centroid-spread
-    ``<= radius_m`` *and* no gap between consecutive samples reaches
-    ``split_gap_s``, growing one sample at a time and stopping at the first
-    sample that would push the spread over ``radius_m`` or that sits across a
-    real-world absence.
+    Return ``(end, work)`` where ``end`` is the largest ``end >= i`` such that
+    the window ``[i..end]`` has centroid-spread ``<= radius_m`` *and* no gap
+    between consecutive samples reaches ``split_gap_s`` (growing one sample at a
+    time), and ``work`` is a cost estimate for this grow — one unit per grown
+    sample plus the window size of every exact-spread recompute, which is what
+    actually dominates the running time (the O(window) ``_cluster_radius_m``
+    numpy pass). Callers use ``work`` to enforce a scan budget so a pathological
+    single giant cluster can't run away.
 
     Equivalent to calling :func:`_cluster_radius_m` on every prefix window, but
     avoids the O(k^2) blow-up on a long single cluster: it maintains a running
@@ -91,12 +123,14 @@ def _cluster_end(
     sy = float(ys[i])
     m = 1
     r_est = 0.0
+    work = 0
     j = i
     while j + 1 < n:
+        work += 1
         a = ts[j]
         b = ts[j + 1]
         if a is not None and b is not None and (b - a).total_seconds() >= split_gap_s:
-            return j  # a real-world absence ends the cluster at j
+            return j, work  # a real-world absence ends the cluster at j
         x = float(xs[j + 1])
         y = float(ys[j + 1])
         cox, coy = sx / m, sy / m
@@ -110,12 +144,15 @@ def _cluster_end(
         d_new = math.hypot(x - cnx, y - cny)
         r_est = max(r_est + shift, d_new)
         if r_est > radius_m:
+            # Exact recompute is an O(window) numpy pass — the real cost driver;
+            # charge its size so the scan budget tracks wall-clock work.
+            work += j + 2 - i
             r_exact = _cluster_radius_m(xs[i : j + 2], ys[i : j + 2])
             if r_exact > radius_m:
-                return j  # adding j+1 breaks the cluster; window ends at j
+                return j, work  # adding j+1 breaks the cluster; window ends at j
             r_est = r_exact  # bound was loose — reset it tight and keep going
         j += 1
-    return j
+    return j, work
 
 
 # A cluster is a *stop* only if its points are clustered around a common centre,
@@ -158,6 +195,7 @@ def detect_stops(
     radius_m: float = DEFAULT_RADIUS_M,
     min_duration_s: float = DEFAULT_MIN_DURATION_S,
     split_gap_s: float = DEFAULT_SPLIT_GAP_S,
+    max_scan_work: Optional[int] = None,
 ) -> List[Stop]:
     """
     Return chronologically ordered stops found in the track.
@@ -175,6 +213,12 @@ def detect_stops(
             separated by a real-world absence are reported as two stops rather
             than one stop spanning the calendar gap. Reuses the split-on-gap
             approach of :func:`bhulan.analytics.trips._trip_bounds`.
+        max_scan_work: Optional cap on the total cluster-scan work (summed
+            grown-cluster sizes). When exceeded, :class:`StopScanBudgetExceeded`
+            is raised — the input is a pathological single giant cluster, not a
+            real track. ``None`` (the default) leaves the scan uncapped; the
+            public API passes ``_MAX_STOP_SCAN_WORK_PER_POINT * n`` so a crafted
+            input can't tie up a worker.
     """
     ts_points: List[TrackSample] = [p for p in points if p.ts_utc is not None]
     n = len(ts_points)
@@ -187,13 +231,31 @@ def detect_stops(
     ts = [p.ts_utc for p in ts_points]
 
     stops: List[Stop] = []
+    scan_work = 0
     i = 0
     while i < n:
-        end = _cluster_end(xs, ys, ts, i, n, radius_m, split_gap_s)
+        end, work = _cluster_end(xs, ys, ts, i, n, radius_m, split_gap_s)
+        # Charge this grow's cost (samples scanned + exact-recompute window
+        # sizes) and bail if the cumulative work blows past the budget — a real
+        # track stays far under, a pathological single giant cluster (re-grown
+        # from every sample) would otherwise run O(n·cluster_size).
+        if max_scan_work is not None:
+            scan_work += work
+            if scan_work > max_scan_work:
+                raise StopScanBudgetExceeded(
+                    f"stop scan exceeded {max_scan_work} work units at sample {i}"
+                )
         if end > i:
             duration = (
                 ts_points[end].ts_utc - ts_points[i].ts_utc  # type: ignore[union-attr, operator]
             ).total_seconds()
+            if duration <= 0.0:
+                # Every sample in [i..end] shares one timestamp, so no sub-window
+                # can meet ``min_duration_s`` — the whole cluster is skipped
+                # rather than re-grown from i+1. This makes a same-timestamp mass
+                # O(n) instead of O(n·cluster_size); real tracks never hit it.
+                i = end + 1
+                continue
             if duration >= min_duration_s and not _is_progressive_translation(
                 xs, ys, i, end, radius_m
             ):
