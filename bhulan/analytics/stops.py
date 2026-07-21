@@ -118,6 +118,41 @@ def _cluster_end(
     return j
 
 
+# A cluster is a *stop* only if its points are clustered around a common centre,
+# not progressively translating through it. A dwell's two consecutive-in-time
+# halves share a centroid (random GPS jitter averages out); a slow walk or crawl
+# drifts, so its first-half centroid sits behind its second-half centroid by
+# roughly the distance travelled. Reject a cluster whose half-to-half centroid
+# drift exceeds this fraction of the stop radius as *movement*, not a stop.
+# Tunable: 0.5 cleanly separates a directional fill of the radius (drift ≈
+# radius) from random jitter (drift → 0). See ADR 0014.
+_PROGRESSIVE_DRIFT_FRACTION = 0.5
+
+
+def _is_progressive_translation(
+    xs: np.ndarray, ys: np.ndarray, i: int, end: int, radius_m: float
+) -> bool:
+    """True if samples ``i..end`` progressively translate (a walk/drive) rather
+    than dwell around a fixed centre.
+
+    Measured by the distance between the centroid of the cluster's first (in
+    time) half and that of its second half: a dwell's halves coincide because
+    random jitter averages out; a translating cluster's halves drift apart by
+    ~the distance travelled between them. Without this check a slow walk that
+    lasts longer than ``min_duration_s`` is chopped into ``radius_m``-sized
+    chunks and each is reported as a phantom stop. A cluster of fewer than four
+    samples is too short to judge direction and is treated as a dwell.
+    """
+    m = end - i + 1
+    if m < 4:
+        return False
+    mid = i + m // 2
+    fx1, fy1 = float(np.mean(xs[i:mid])), float(np.mean(ys[i:mid]))
+    fx2, fy2 = float(np.mean(xs[mid : end + 1])), float(np.mean(ys[mid : end + 1]))
+    drift = math.hypot(fx2 - fx1, fy2 - fy1)
+    return drift > _PROGRESSIVE_DRIFT_FRACTION * radius_m
+
+
 def detect_stops(
     points: Sequence[TrackSample],
     radius_m: float = DEFAULT_RADIUS_M,
@@ -159,7 +194,9 @@ def detect_stops(
             duration = (
                 ts_points[end].ts_utc - ts_points[i].ts_utc  # type: ignore[union-attr, operator]
             ).total_seconds()
-            if duration >= min_duration_s:
+            if duration >= min_duration_s and not _is_progressive_translation(
+                xs, ys, i, end, radius_m
+            ):
                 xs_c = xs[i : end + 1]
                 ys_c = ys[i : end + 1]
                 lat_c = float(np.mean([p.lat for p in ts_points[i : end + 1]]))
