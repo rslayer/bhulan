@@ -104,42 +104,49 @@ def _run() -> tuple[dict, list[tuple[float, float]]]:
     return payload, positions
 
 
-def test_heavy_dwell_then_light_walk_merges_but_centroid_leaves_merge_radius(client: TestClient):
-    """AC2 requires the merged centroid to stay within merge_radius_m of every
-    member it claims to summarize. A heavy dwell (~300 samples) followed by a
-    straight-line walk of brief (2-sample) stops, each hop well inside
-    merge_stops_within_m, still merges into one stop per cycle 7 -- but the
-    sample_count-weighted centroid snaps onto the heavy dwell and abandons the
-    light members, landing the farthest one ~118m from the reported centroid
-    against a 45m merge radius.
+def test_heavy_dwell_then_light_walk_stays_bounded_by_stop_radius(client: TestClient):
+    """A stop is one place — points clustered within ``stop_radius_m`` of a
+    centre — and the merge cap (ADR 0013) enforces exactly that.
+
+    A heavy dwell (~300 samples at B) followed by a straight-line walk of brief
+    stops 40/80/120 m away must NOT collapse into one stop: the walk stops are
+    each beyond ``stop_radius_m`` of the dwell, so they are movement, not part of
+    the dwell. Before the cap, cycle 7's unbounded single-linkage folded them
+    all into one blob and the ``sample_count``-weighted centroid snapped onto the
+    heavy dwell, misreporting the merged stop ~118 m from its own far members.
+    The cap fixes this by keeping every reported stop bounded to one stop's
+    radius, so the location is never misreported.
     """
     payload, positions = _run()
+    stop_radius_m = payload["options"]["stop_radius_m"]
     r = client.post("/v1/insights", json=payload)
     assert r.status_code == 200
     report = r.json()
 
     stops = report["stops"]
-    assert len(stops) == 1, (
-        "test setup: the heavy dwell and the three brief walk-away stops must "
-        "all merge into one blob (every consecutive pairwise distance is "
-        "well inside merge_stops_within_m, so cycle 7's single-linkage "
-        "decision is unaffected)"
+
+    # The cap splits the dwell from the walk: they do NOT collapse into one
+    # wide stop. (Before the cap this was a single ~120 m-spanning blob.)
+    assert len(stops) > 1, (
+        "the heavy dwell and the walk-away stops are each beyond stop_radius_m "
+        f"({stop_radius_m}m) of one another and must not merge into one stop; "
+        f"got a single stop spanning the whole walk"
     )
-    merged = stops[0]
 
-    dist_to_b = haversine_m(merged["lat"], merged["lon"], _LAT_B, _LON)
-    assert dist_to_b <= _MERGE_RADIUS_M, "test setup: centroid should stay near the heavy dwell"
+    # Every reported stop is a genuine bounded cluster: its centroid lies within
+    # stop_radius_m of every member it summarizes (radius_m never exceeds one
+    # stop's radius, allowing a small numeric margin). This is the invariant the
+    # cap guarantees and the old unbounded merge violated (worst member ~118 m
+    # from the centroid against a 5 m stop radius).
+    eps = 1e-6
+    for st in stops:
+        assert st["radius_m"] <= stop_radius_m + eps, (
+            f"a reported stop has radius_m={st['radius_m']:.1f}m > "
+            f"stop_radius_m={stop_radius_m}m — a merged stop must never be "
+            f"wider than one stop's radius (ADR 0013)"
+        )
 
-    dists = [haversine_m(merged["lat"], merged["lon"], lat, lon) for lat, lon in positions]
-    worst = max(dists)
-
-    assert all(d <= _MERGE_RADIUS_M for d in dists), (
-        f"AC2 requires the merged centroid to lie within merge_radius_m="
-        f"{_MERGE_RADIUS_M}m of every member; got per-step distances "
-        f"{[f'{d:.1f}m' for d in dists]} (worst {worst:.1f}m) for a walk-away "
-        f"chain where every consecutive pairwise merge-decision distance was "
-        f"only {_STEP_M}m -- the sample_count-weighted centroid concentrates "
-        f"almost entirely on the heavy dwell and ignores how far the chain "
-        f"has since walked, silently misreporting the merged stop's location "
-        f"for every light member beyond the first hop."
-    )
+    # The heavy dwell is still reported, centred on B (not dragged toward the
+    # walk): some stop sits within stop_radius_m of B and carries the long dwell.
+    dwell = [s for s in stops if haversine_m(s["lat"], s["lon"], _LAT_B, _LON) <= stop_radius_m + eps]
+    assert dwell, "the heavy dwell at B must still be reported as its own bounded stop"

@@ -88,7 +88,18 @@ def test_merging_long_drift_chain_completes_in_reasonable_time(client: TestClien
 
     assert r.status_code == 200
     stops = r.json()["stops"]
-    assert len(stops) == 1, "test setup: the whole drift chain must merge into a single blob"
+    # Under the stop_radius_m cap (ADR 0013) a drift chain no longer collapses
+    # into one blob — each step is _STEP_M (20 m) from the group anchor, well
+    # beyond stop_radius_m (2 m), so every stop stays its own group. That is the
+    # correct behaviour (a slow drift is movement, not one giant stop). The
+    # point of THIS test is unchanged: the whole detect→cap→merge pipeline must
+    # stay O(n) on a pathological chain, not O(n²). The chain splitting rather
+    # than merging does not relax that — the per-stop cap check is O(1), and
+    # _merge_members runs once per (here singleton) group.
+    assert len(stops) == _N_STOPS, (
+        f"under the cap each {_STEP_M}m-separated stop should stay distinct; "
+        f"got {len(stops)} for {_N_STOPS} input stops"
+    )
     assert elapsed < _MAX_ACCEPTABLE_SECONDS, (
         f"merging a {_N_STOPS}-stop drift chain took {elapsed:.2f}s (expected "
         f"< {_MAX_ACCEPTABLE_SECONDS}s) -- merge_nearby_stops's per-blob "
