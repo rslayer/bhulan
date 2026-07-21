@@ -52,6 +52,28 @@ def test_scan_work_budget_raises_on_a_giant_rejected_cluster():
         detect_stops(pts, radius_m=50.0, min_duration_s=300.0, max_scan_work=200_000)
 
 
+def test_one_long_accepted_dwell_scans_in_linear_work():
+    # Structural (op-count, not wall-clock) replacement for the removed flaky
+    # timing test: a real N-sample dwell — the original "quadratic blowup" case —
+    # is grown once, accepted as a stop, and the scan jumps past it, so the total
+    # work is ~O(N). A tight linear budget (4*N) proves it: an O(N^2) recompute
+    # (the pre-incremental-bound behaviour) would blow past it long before the end.
+    n = 40_000
+    base = datetime(2024, 1, 1, tzinfo=timezone.utc)
+    # A dense dwell: many samples jittering within a few metres of one spot.
+    pts = [
+        TrackSample(
+            lat=40.0 + ((i % 5) - 2) * 1e-6,  # ~±0.2 m of jitter
+            lon=-100.0 + ((i % 3) - 1) * 1e-6,
+            ts_utc=base + timedelta(seconds=i),
+        )
+        for i in range(n)
+    ]
+    stops = detect_stops(pts, radius_m=50.0, min_duration_s=300.0, max_scan_work=4 * n)
+    assert len(stops) == 1, "a single long dwell should be one stop"
+    assert stops[0].sample_count == n, "the whole dwell should be one accepted cluster"
+
+
 def test_uncapped_default_is_unchanged_for_a_normal_track():
     # A real drive → dwell → drive with the default (no budget) still finds the
     # one stop; the budget only applies when a caller passes max_scan_work.
