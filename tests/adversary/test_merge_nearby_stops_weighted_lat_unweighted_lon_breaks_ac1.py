@@ -78,7 +78,7 @@ def _run() -> dict:
     return {
         "points": points,
         "options": {
-            "stop_radius_m": 5.0,
+            "stop_radius_m": 100.0,
             "min_stop_minutes": 0.5,
             "merge_stops_within_m": _MERGE_RADIUS_M,
         },

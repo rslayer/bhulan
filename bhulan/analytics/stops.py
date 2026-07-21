@@ -188,10 +188,26 @@ def merge_nearby_stops(
     stops: Sequence[Stop],
     merge_radius_m: Optional[float] = None,
     split_gap_s: float = DEFAULT_SPLIT_GAP_S,
+    stop_radius_m: float = DEFAULT_RADIUS_M,
 ) -> List[Stop]:
     """
     Merge consecutive stops whose centroids are within ``merge_radius_m`` *and*
-    that are not separated by a real-world absence.
+    that are not separated by a real-world absence — but never beyond one stop's
+    worth of ground (``stop_radius_m``).
+
+    A stop is one *place*: points clustered around a common centre, all within
+    ``stop_radius_m`` of it. Merging only reunites GPS-jitter fragments of one
+    such place — so **the stop radius bounds the merge**. A stop joins the
+    current merged group only while it stays within ``stop_radius_m`` of the
+    group's *anchor* (its first member's centroid); when the chain has wandered
+    beyond one stop's radius (a slow walk or drift, not a dwell), the next stop
+    starts a new group instead of extending an ever-widening blob. This bounds
+    every merged group to a ``stop_radius_m`` disk around its anchor, so a
+    reported "stop" is never larger than one stop. ``merge_radius_m`` still
+    gates *whether* two neighbours are close enough to consider at all (and
+    whether merging is enabled), but the ``stop_radius_m`` cap dominates: a
+    ``merge_radius_m`` looser than ``stop_radius_m`` cannot produce a stop wider
+    than ``stop_radius_m``. See ADR 0013.
 
     Useful when GPS jitter splits what is semantically a single visit into two
     back-to-back stops separated by a handful of moving samples.
@@ -257,7 +273,23 @@ def merge_nearby_stops(
         close_in_space = centroid_dist_m <= merge_radius_m
         close_in_time = gap_s < split_gap_s
 
-        if close_in_space and close_in_time:
+        # Cap: a merged stop is never larger than one stop. ``s`` may extend the
+        # current group only while it stays within ``stop_radius_m`` of the
+        # group's fixed anchor (its first member's centroid), so every member
+        # sits inside one ``stop_radius_m`` disk around a common reference —
+        # "clustered around a common centre." This is O(1) per stop (a single
+        # anchor comparison, no per-member recompute — that would reintroduce
+        # the cycle-9 O(n²) blow-up), and it bounds the group without letting a
+        # slow walk/drift chain into one implausibly wide "stop." When the cap
+        # is tripped, ``s`` begins a new group. The anchor is the *first*
+        # member and never moves, so the guarantee (every member within
+        # ``stop_radius_m`` of the anchor) is exact, not centroid-drift-prone.
+        anchor = groups[-1][0]
+        within_stop_radius = (
+            haversine_m(anchor.lat, anchor.lon, s.lat, s.lon) <= stop_radius_m
+        )
+
+        if close_in_space and close_in_time and within_stop_radius:
             groups[-1].append(s)
         else:
             groups.append([s])

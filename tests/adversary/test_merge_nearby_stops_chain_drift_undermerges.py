@@ -80,7 +80,7 @@ def test_chain_of_pairwise_close_stops_fully_merges(client: TestClient):
 
     payload = {
         "points": cluster_a + cluster_b + cluster_c,
-        "options": {"stop_radius_m": 5.0, "merge_stops_within_m": _MERGE_RADIUS_M},
+        "options": {"stop_radius_m": 100.0, "merge_stops_within_m": _MERGE_RADIUS_M},
     }
     r = client.post("/v1/insights", json=payload)
     assert r.status_code == 200

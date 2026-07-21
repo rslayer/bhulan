@@ -79,7 +79,7 @@ def test_merged_stop_radius_m_reflects_true_spread(client: TestClient):
 
     payload = {
         "points": cluster_a + cluster_b,
-        "options": {"stop_radius_m": 5.0, "merge_stops_within_m": 60.0},
+        "options": {"stop_radius_m": 50.0, "merge_stops_within_m": 60.0},
     }
     r = client.post("/v1/insights", json=payload)
     assert r.status_code == 200

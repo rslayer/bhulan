@@ -452,6 +452,10 @@ def compute_insights(request: InsightsRequest) -> InsightsReport:
         # Same real-world-absence gap detect_stops split on, so merge can't
         # recombine what detect_stops correctly kept apart. One knob.
         split_gap_s=opts.trip_split_gap_minutes * 60.0,
+        # A merged stop is never larger than one stop: the same stop_radius the
+        # detector uses caps the merge, so a slow walk/drift can't chain into a
+        # single implausibly wide "stop." See ADR 0013.
+        stop_radius_m=opts.stop_radius_m,
     )
 
     # Trips use the already-detected stops as split candidates so we
