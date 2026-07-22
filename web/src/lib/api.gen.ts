@@ -619,6 +619,12 @@ export interface components {
              */
             moving_speed_kmh: number;
             /**
+             * Progressive Drift Fraction
+             * @description Walk-vs-dwell sensitivity for stop detection. A cluster is treated as movement (a walk/drive), not a stop, when its first-half-to-second-half centroid drift exceeds this fraction of stop_radius_m. Default 0.5 cleanly separates a directional fill of the radius from random GPS jitter; lower rejects movement more aggressively, and a large value effectively disables the check.
+             * @default 0.5
+             */
+            progressive_drift_fraction: number;
+            /**
              * Merge Stops Within M
              * @description If set, merge consecutive stops whose centroids are within this radius
              */

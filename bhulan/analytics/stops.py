@@ -58,7 +58,7 @@ DEFAULT_SPLIT_GAP_S = 60 * 60.0  # 60 minutes
 _MAX_STOP_SCAN_WORK = 12_000_000
 
 
-class StopScanBudgetExceeded(Exception):
+class StopScanBudgetExceeded(Exception):  # noqa: N818 — "Exceeded" reads clearly; renaming would churn 5 call sites
     """detect_stops' scan work exceeded its budget — the input is a pathological
     single giant cluster (a slow drift or same-timestamp mass), not a real
     track. Callers degrade gracefully (report no stops + a quality note) rather
@@ -366,6 +366,11 @@ def merge_nearby_stops(
             groups.append([s])
             prev_original = s
             continue
+
+        # ``groups`` is non-empty only after the first iteration set
+        # ``prev_original``, so it is never None here. The assert both documents
+        # that invariant and lets the type checker narrow ``Optional[Stop]``.
+        assert prev_original is not None
 
         # Decide against the immediately preceding *original* stop. Its
         # ``end_ts`` equals the blob's ``end_ts`` (the blob always ends at its
