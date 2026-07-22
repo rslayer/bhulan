@@ -167,7 +167,12 @@ _PROGRESSIVE_DRIFT_FRACTION = 0.5
 
 
 def _is_progressive_translation(
-    xs: np.ndarray, ys: np.ndarray, i: int, end: int, radius_m: float
+    xs: np.ndarray,
+    ys: np.ndarray,
+    i: int,
+    end: int,
+    radius_m: float,
+    drift_fraction: float = _PROGRESSIVE_DRIFT_FRACTION,
 ) -> bool:
     """True if samples ``i..end`` progressively translate (a walk/drive) rather
     than dwell around a fixed centre.
@@ -179,6 +184,10 @@ def _is_progressive_translation(
     lasts longer than ``min_duration_s`` is chopped into ``radius_m``-sized
     chunks and each is reported as a phantom stop. A cluster of fewer than four
     samples is too short to judge direction and is treated as a dwell.
+
+    ``drift_fraction`` is the sensitivity: a cluster is movement when its
+    half-to-half drift exceeds ``drift_fraction * radius_m``. Lower rejects more
+    aggressively; a large value effectively disables the check.
     """
     m = end - i + 1
     if m < 4:
@@ -187,7 +196,7 @@ def _is_progressive_translation(
     fx1, fy1 = float(np.mean(xs[i:mid])), float(np.mean(ys[i:mid]))
     fx2, fy2 = float(np.mean(xs[mid : end + 1])), float(np.mean(ys[mid : end + 1]))
     drift = math.hypot(fx2 - fx1, fy2 - fy1)
-    return drift > _PROGRESSIVE_DRIFT_FRACTION * radius_m
+    return drift > drift_fraction * radius_m
 
 
 def detect_stops(
@@ -196,6 +205,7 @@ def detect_stops(
     min_duration_s: float = DEFAULT_MIN_DURATION_S,
     split_gap_s: float = DEFAULT_SPLIT_GAP_S,
     max_scan_work: Optional[int] = None,
+    progressive_drift_fraction: float = _PROGRESSIVE_DRIFT_FRACTION,
 ) -> List[Stop]:
     """
     Return chronologically ordered stops found in the track.
@@ -257,7 +267,7 @@ def detect_stops(
                 i = end + 1
                 continue
             if duration >= min_duration_s and not _is_progressive_translation(
-                xs, ys, i, end, radius_m
+                xs, ys, i, end, radius_m, progressive_drift_fraction
             ):
                 xs_c = xs[i : end + 1]
                 ys_c = ys[i : end + 1]

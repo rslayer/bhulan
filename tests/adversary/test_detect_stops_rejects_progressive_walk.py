@@ -76,3 +76,41 @@ def test_jittery_dwell_is_still_reported_as_one_stop(client: TestClient):
         f"{len(stops)} — the progressive-movement filter must not reject a "
         f"genuine dwell"
     )
+
+
+def test_progressive_drift_fraction_option_tunes_walk_rejection(client: TestClient):
+    # The same steady walk: at the default it is rejected (0 stops); a large
+    # progressive_drift_fraction relaxes the filter so the chunks are kept, and
+    # a value at/above the disabling range must be accepted by validation.
+    walk = {"points": _walk(n=40, step_m=5.0, dt_s=30.0)}
+
+    default = client.post(
+        "/v1/insights",
+        json={**walk, "options": {"stop_radius_m": 50.0, "min_stop_minutes": 5.0}},
+    )
+    assert default.status_code == 200
+    assert len(default.json()["stops"]) == 0, "default (0.5) must reject the walk"
+
+    relaxed = client.post(
+        "/v1/insights",
+        json={
+            **walk,
+            "options": {
+                "stop_radius_m": 50.0,
+                "min_stop_minutes": 5.0,
+                "progressive_drift_fraction": 10.0,
+            },
+        },
+    )
+    assert relaxed.status_code == 200
+    assert len(relaxed.json()["stops"]) > 0, (
+        "a large progressive_drift_fraction must relax the walk-vs-dwell filter "
+        "so the walk's chunks are no longer rejected"
+    )
+
+    # Out-of-range values are a clean validation error.
+    bad = client.post(
+        "/v1/insights",
+        json={**walk, "options": {"progressive_drift_fraction": 0.0}},
+    )
+    assert bad.status_code == 422

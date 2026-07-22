@@ -28,6 +28,7 @@ from bhulan.analytics.stops import (
     Stop,
     StopScanBudgetExceeded,
     _MAX_STOP_SCAN_WORK,
+    _PROGRESSIVE_DRIFT_FRACTION,
     detect_stops,
     merge_nearby_stops,
 )
@@ -103,6 +104,19 @@ class InsightsOptions(BaseModel):
         DEFAULT_MIN_DURATION_S / 60.0, gt=0, le=24 * 60, description="Minutes"
     )
     moving_speed_kmh: float = Field(3.6, ge=0, le=300, description="Speed threshold for 'moving'")
+    progressive_drift_fraction: float = Field(
+        _PROGRESSIVE_DRIFT_FRACTION,
+        gt=0,
+        le=10,
+        description=(
+            "Walk-vs-dwell sensitivity for stop detection. A cluster is treated "
+            "as movement (a walk/drive), not a stop, when its first-half-to-"
+            "second-half centroid drift exceeds this fraction of stop_radius_m. "
+            "Default 0.5 cleanly separates a directional fill of the radius from "
+            "random GPS jitter; lower rejects movement more aggressively, and a "
+            "large value effectively disables the check."
+        ),
+    )
     merge_stops_within_m: Optional[float] = Field(
         None,
         ge=0,
@@ -466,6 +480,7 @@ def compute_insights(request: InsightsRequest) -> InsightsReport:
             # drift, or a same-timestamp mass) can't tie up a worker — see ADR
             # 0016. A real track does far less work than this absolute cap.
             max_scan_work=_MAX_STOP_SCAN_WORK,
+            progressive_drift_fraction=opts.progressive_drift_fraction,
         )
     except StopScanBudgetExceeded:
         # The input is too dense/degenerate for stop detection within budget.

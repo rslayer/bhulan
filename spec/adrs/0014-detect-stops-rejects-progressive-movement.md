@@ -46,9 +46,11 @@ verified O(n) on a 16 000-sample walk.
 - `_PROGRESSIVE_DRIFT_FRACTION = 0.5` is a **tunable** threshold. 0.5 cleanly
   separates a directional fill of the radius (drift ≈ radius) from random jitter
   (drift → 0). A lower value rejects more aggressively (risking dropping a dwell
-  that slowly shifts within its radius); a higher value is more permissive. Left
-  as a module constant for now; could become an `InsightsOptions` knob if callers
-  need per-request control.
+  that slowly shifts within its radius); a higher value is more permissive.
+  **Exposed as `InsightsOptions.progressive_drift_fraction`** (default 0.5,
+  `gt=0, le=10`) so callers can tune the walk-vs-dwell sensitivity per request —
+  a large value effectively disables the filter. The module constant remains the
+  default for direct `detect_stops` callers.
 - **Interaction with the merge cap ([[0013]]).** Progressive-rejection is the
   *primary* defence — a walk never becomes stops, so it never reaches the merge.
   The cap remains correct as defence-in-depth for genuine nearby dwells, but is
