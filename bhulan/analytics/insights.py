@@ -23,12 +23,12 @@ from bhulan.analytics.hotspots import (
 )
 from bhulan.analytics.mobility import Segment, TrackSample, prepare_track
 from bhulan.analytics.stops import (
+    _MAX_STOP_SCAN_WORK,
+    _PROGRESSIVE_DRIFT_FRACTION,
     DEFAULT_MIN_DURATION_S,
     DEFAULT_RADIUS_M,
     Stop,
     StopScanBudgetExceeded,
-    _MAX_STOP_SCAN_WORK,
-    _PROGRESSIVE_DRIFT_FRACTION,
     detect_stops,
     merge_nearby_stops,
 )

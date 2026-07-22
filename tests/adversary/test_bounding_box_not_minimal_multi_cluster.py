@@ -40,9 +40,9 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-import bhulan.storage.mongo_repo as mongo_repo  # noqa: F401  (fixture parity, see conftest)
-import pytest
 from fastapi.testclient import TestClient
+
+import bhulan.storage.mongo_repo as mongo_repo  # noqa: F401  (fixture parity, see conftest)
 
 _LAT = 10.0
 _LONS = [-170.0, -100.0, -30.0, 0.0, 60.0, 170.0]

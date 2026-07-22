@@ -33,10 +33,9 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-import bhulan.storage.mongo_repo as mongo_repo  # noqa: F401  (fixture parity, see conftest)
-import pytest
 from fastapi.testclient import TestClient
 
+import bhulan.storage.mongo_repo as mongo_repo  # noqa: F401  (fixture parity, see conftest)
 from bhulan.analytics.geodesy import haversine_m
 
 _T0 = datetime(2024, 1, 1, tzinfo=timezone.utc)
