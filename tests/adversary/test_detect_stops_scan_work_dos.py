@@ -100,7 +100,9 @@ def test_insights_endpoint_bounds_a_pathological_body(client: TestClient):
     assert r.status_code == 200
     assert elapsed < 20.0, f"a 100k-point drift took {elapsed:.1f}s — the scan-work budget is not bounding it"
     body = r.json()
+    # A pure drift has no real dwell before the budget hit, so there are no
+    # partial stops to keep — the truncation note stands in for "no stops".
     assert body["stops"] == []
-    assert any("too dense or degenerate" in issue for issue in body["quality"]["issues"])
+    assert any("truncated" in issue for issue in body["quality"]["issues"])
     # the rest of the pipeline still ran
     assert body["summary"]["total_distance_km"] > 0
