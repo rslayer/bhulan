@@ -59,10 +59,20 @@ _MAX_STOP_SCAN_WORK = 12_000_000
 
 
 class StopScanBudgetExceeded(Exception):  # noqa: N818 — "Exceeded" reads clearly; renaming would churn 5 call sites
-    """detect_stops' scan work exceeded its budget — the input is a pathological
-    single giant cluster (a slow drift or same-timestamp mass), not a real
-    track. Callers degrade gracefully (report no stops + a quality note) rather
-    than hang."""
+    """detect_stops' scan work exceeded its budget partway through a track.
+
+    The trigger is a pathological *segment* — a very slow drift or a
+    same-timestamp mass — not a wholly bad track: the samples before it are
+    usually a normal sequence of real stops. ``partial_stops`` carries every
+    stop already found when the budget was hit, so callers keep those and only
+    lose detection past the offending point, rather than discarding the entire
+    track's results (which turned one dense segment into "zero stops" for an
+    otherwise ordinary file). See ADR 0016.
+    """
+
+    def __init__(self, message: str, partial_stops: Optional[List["Stop"]] = None):
+        super().__init__(message)
+        self.partial_stops: List[Stop] = list(partial_stops) if partial_stops else []
 
 
 @dataclass(frozen=True)
@@ -225,10 +235,12 @@ def detect_stops(
             approach of :func:`bhulan.analytics.trips._trip_bounds`.
         max_scan_work: Optional cap on the total cluster-scan work (summed
             grown-cluster sizes). When exceeded, :class:`StopScanBudgetExceeded`
-            is raised — the input is a pathological single giant cluster, not a
-            real track. ``None`` (the default) leaves the scan uncapped; the
-            public API passes ``_MAX_STOP_SCAN_WORK_PER_POINT * n`` so a crafted
-            input can't tie up a worker.
+            is raised carrying ``partial_stops`` — every stop found before the
+            budget was hit — so the caller keeps those and only truncates
+            detection past the pathological point. ``None`` (the default) leaves
+            the scan uncapped; the public API passes the fixed absolute
+            ``_MAX_STOP_SCAN_WORK`` (not scaled by ``n``) so a crafted input
+            can't tie up a worker.
     """
     ts_points: List[TrackSample] = [p for p in points if p.ts_utc is not None]
     n = len(ts_points)
@@ -252,8 +264,13 @@ def detect_stops(
         if max_scan_work is not None:
             scan_work += work
             if scan_work > max_scan_work:
+                # Stop scanning at the pathological segment, but hand back every
+                # stop found *before* it — discarding the whole list turned one
+                # dense/slow-drift segment into "zero stops" for an otherwise
+                # ordinary track (a real dwell followed by a long slow walk).
                 raise StopScanBudgetExceeded(
-                    f"stop scan exceeded {max_scan_work} work units at sample {i}"
+                    f"stop scan exceeded {max_scan_work} work units at sample {i}",
+                    partial_stops=stops,
                 )
         if end > i:
             duration = (

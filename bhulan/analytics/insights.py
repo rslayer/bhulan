@@ -482,15 +482,17 @@ def compute_insights(request: InsightsRequest) -> InsightsReport:
             max_scan_work=_MAX_STOP_SCAN_WORK,
             progressive_drift_fraction=opts.progressive_drift_fraction,
         )
-    except StopScanBudgetExceeded:
-        # The input is too dense/degenerate for stop detection within budget.
-        # Skip stops (and therefore trips) but still return every other insight
-        # — distance, speed, bbox, hotspots — rather than hang or 500.
-        raw_stops = []
+    except StopScanBudgetExceeded as exc:
+        # A dense/degenerate segment (very slow drift or same-timestamp mass)
+        # blew the scan budget partway through. Keep the stops found *before*
+        # it — discarding them turned one bad segment into "zero stops" for an
+        # otherwise ordinary track — and only note that detection past that
+        # point was truncated. Everything else (distance, speed, bbox,
+        # hotspots) is still returned.
+        raw_stops = exc.partial_stops
         quality.issues.append(
-            "Stop detection skipped: the track is too dense or degenerate "
-            "(e.g. a very slow drift or many samples at one timestamp) to "
-            "analyze within the allotted budget."
+            "Stop detection was truncated after a very dense or slowly-drifting "
+            "segment; any stops beyond that point may be missing."
         )
     stops = merge_nearby_stops(
         raw_stops,
