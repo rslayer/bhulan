@@ -22,6 +22,11 @@
 #     TRIAGE are READ-ONLY on product code and may only ADD/DELETE tests — a
 #     guard step fails the run if any `bhulan/` file changes.
 #   - EVAL runs the existing unit+integration suite as a hard regression gate.
+#   - A CI-PARITY step after BUILD mirrors ci.yml's non-test gates (ruff, mypy,
+#     openapi.json drift, frontend gen:api:check): it auto-fixes the mechanical
+#     ones and regenerates the generated files so the PR this loop opens isn't
+#     red on lint/type/schema (which, when merged, turned master red every
+#     cycle). Genuine mypy/lint errors are left for the build agent to fix.
 #
 # Trigger: workflow_dispatch ONLY. Needs the CLAUDE_CODE_OAUTH_TOKEN secret.
 
@@ -69,6 +74,17 @@ jobs:
         with:
           python-version: "3.12"
 
+      # Node is needed so the CI-parity step can regenerate the frontend API
+      # types (web/src/lib/api.gen.ts) that ci.yml's gen:api:check compares —
+      # the build agent's Python-only environment can't, which is why openapi
+      # changes kept landing frontend-codegen drift.
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
       - name: Install Poetry
         run: pipx install poetry==1.8.3
 
@@ -102,8 +118,48 @@ jobs:
             - Follow existing patterns; tests use `fastapi.testclient.TestClient`
               over `bhulan.api.app:app` (public /v1 surface needs no MongoDB).
             - Record any material design choice as a new file in `spec/adrs/`.
+            - CI (which runs on the PR this loop opens) enforces MORE than the
+              test suite. Before you finish: run `poetry run ruff check bhulan/
+              scripts/ tests/` and `poetry run mypy bhulan/` and FIX every error
+              you introduce (a later step auto-fixes import order, so focus on
+              real lint/type issues like unused names, naming, and Optional
+              narrowing). If you changed any request/response model, run
+              `poetry run python scripts/export_openapi.py` so `openapi.json`
+              stays in sync. Leaving any of these red ships a red PR that turns
+              master red when a human merges it.
             ${{ inputs.focus && format('Cycle note: {0}', inputs.focus) || '' }}
           claude_args: '--model opus --max-turns 45 --allowedTools "Read,Grep,Glob,Edit,Write,MultiEdit,Bash"'
+
+      # ---------------------------------------------------------------------
+      # CI PARITY — the loop's regression gate below is pytest-only, but ci.yml
+      # (which runs on the PR this loop opens) also enforces ruff, mypy, an
+      # openapi.json drift check, and the frontend gen:api:check. Without this,
+      # the build agent's commits land a PR that is RED on those extra gates,
+      # and merging it turns master red every cycle. Deterministically fix the
+      # MECHANICAL gates here — ruff import-order/unused autofix, and
+      # regenerating the two generated files — so only genuine mypy / lint
+      # errors remain, which are the build agent's job (see its HARD RULES).
+      # Non-fatal by design: the loop must still open a PR for human review;
+      # any gate left red is surfaced as a ::warning and by ci.yml on the PR.
+      # ---------------------------------------------------------------------
+      - name: CI parity — autofix lint + regenerate generated files
+        run: |
+          set +e
+          # Mechanical: import order + unused imports (the recurring I001/F401).
+          poetry run ruff check --fix bhulan/ scripts/ tests/ || true
+          # Mechanical: the OpenAPI snapshot ci.yml diff-checks.
+          poetry run python scripts/export_openapi.py \
+            || echo "::warning ::openapi export failed — schema drift may remain on the PR"
+          # Mechanical: the frontend API types ci.yml's gen:api:check compares.
+          if [ -f web/package-lock.json ]; then
+            ( cd web && npm ci --no-audit --no-fund && npm run gen:api ) \
+              || echo "::warning ::frontend api.gen.ts regen failed — codegen drift may remain on the PR"
+          fi
+          # Surface the gates that still need the build agent (or a human) to fix.
+          echo "== ruff (post-autofix) =="
+          poetry run ruff check bhulan/ scripts/ tests/ || echo "::warning ::ruff still failing — the build agent must fix these"
+          echo "== mypy =="
+          poetry run mypy bhulan/ || echo "::warning ::mypy still failing — the build agent must fix these"
 
       # ---------------------------------------------------------------------
       # EVAL — the referee. Existing unit+integration suite = regression gate.
