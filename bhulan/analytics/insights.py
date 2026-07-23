@@ -213,7 +213,18 @@ class StopOut(BaseModel):
     start_ts: datetime
     end_ts: datetime
     duration_min: float
-    radius_m: float
+    radius_m: float = Field(
+        ...,
+        description=(
+            "True enclosing spread: the distance from this stop's centroid to "
+            "its farthest sample. For an unmerged stop this is <= "
+            "stop_radius_m. When merge_stops_within_m is set, merging bounds "
+            "each member to one stop_radius_m of its group's anchor, so an "
+            "asymmetric merged group can report up to about 2x stop_radius_m — "
+            "a quality issue is emitted when it does. Read this as the actual "
+            "spread, not a guaranteed bound."
+        ),
+    )
     sample_count: int
     place_name: Optional[str] = Field(
         None,
@@ -500,11 +511,33 @@ def compute_insights(request: InsightsRequest) -> InsightsReport:
         # Same real-world-absence gap detect_stops split on, so merge can't
         # recombine what detect_stops correctly kept apart. One knob.
         split_gap_s=opts.trip_split_gap_minutes * 60.0,
-        # A merged stop is never larger than one stop: the same stop_radius the
-        # detector uses caps the merge, so a slow walk/drift can't chain into a
-        # single implausibly wide "stop." See ADR 0013.
+        # Bounds each merged member to one stop radius of its group's anchor,
+        # so a slow walk/drift can't chain into an unbounded blob. Note this
+        # bounds MEMBERSHIP (a disk around the anchor), not the emitted
+        # radius_m — see ADR 0013's cycle-16 correction and the note below.
         stop_radius_m=opts.stop_radius_m,
     )
+
+    # The anchor cap confines members to a disk of radius stop_radius_m around
+    # the anchor (diameter 2x), but radius_m is measured from the weighted
+    # centroid, so an asymmetric group can legitimately report up to ~2x
+    # stop_radius_m. Guaranteeing the tighter bound at full merge reach needs a
+    # per-admission recompute against the moving centroid (the O(n^2) blow-up
+    # ADR 0011 avoids), and the O(1) alternative would fragment the large-site
+    # dwells a big stop_radius_m exists to describe. So report the honest spread
+    # — but never silently: flag it so a consumer can't mistake radius_m for a
+    # hard "one place within stop_radius_m" bound. Only merging can produce
+    # this; detect_stops already bounds every unmerged stop.
+    if opts.merge_stops_within_m is not None:
+        widest = max((s.radius_m for s in stops), default=0.0)
+        if widest > opts.stop_radius_m:
+            quality.issues.append(
+                f"A merged stop spans {widest:.0f}m, wider than the configured "
+                f"stop_radius_m of {opts.stop_radius_m:.0f}m: merging bounds each "
+                f"member to one stop radius of its group's anchor, so an "
+                f"asymmetric group's centroid-relative radius can reach about "
+                f"twice that. Treat radius_m as the true spread, not a bound."
+            )
 
     # Trips use the already-detected stops as split candidates so we
     # don't re-cluster the same points.

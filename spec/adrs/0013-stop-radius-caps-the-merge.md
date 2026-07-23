@@ -34,10 +34,15 @@ instead of extending an ever-widening blob.
 - The cap is tied to **`stop_radius_m`**, the caller's own definition of how big
   one stop is (threaded from `InsightsOptions.stop_radius_m`, the same value
   `detect_stops` uses) — not to a multiple of `merge_stops_within_m`. A
-  `merge_stops_within_m` looser than `stop_radius_m` therefore cannot produce a
-  stop wider than one stop: **the stop radius wins.** `merge_stops_within_m`
-  still gates whether two neighbours are close enough to consider at all (and
-  whether merging is enabled).
+  `merge_stops_within_m` looser than `stop_radius_m` therefore cannot pull in a
+  **member** farther than one stop radius from the anchor: **the stop radius
+  wins.** `merge_stops_within_m` still gates whether two neighbours are close
+  enough to consider at all (and whether merging is enabled).
+  - **Scope of that guarantee (corrected — see "Consequences").** It bounds
+    *membership* to a disk of radius `stop_radius_m` **centred on the anchor**,
+    i.e. a disk of *diameter* `2 × stop_radius_m`. It does **not** bound the
+    reported `radius_m`, which is measured from the weighted centroid, not the
+    anchor.
 - The anchor is the group's **first** member and never moves, so "every member
   within `stop_radius_m` of the anchor" is an exact O(1)-per-stop guarantee — no
   per-member recompute against a drifting centroid, which would reintroduce the
@@ -51,9 +56,37 @@ instead of extending an ever-widening blob.
 - A progressive walk/drive no longer masquerades as one wide stop; it splits into
   bounded stops (or, once `detect_stops` gains progressive-movement rejection —
   the next cycle — is not reported as stops at all).
-- Every reported merged stop is a genuine cluster: `radius_m ≤ stop_radius_m`
-  (allowing a small numeric margin), so a downstream "was the vehicle parked
-  here" consumer can trust the location and spread.
+- Every reported merged stop's **members lie within `stop_radius_m` of the
+  group's anchor.** That is the exact, O(1) guarantee the cap provides.
+
+  **Correction (cycle 16).** An earlier revision of this ADR claimed the
+  stronger "`radius_m ≤ stop_radius_m`, so a downstream 'was the vehicle parked
+  here' consumer can trust the spread." **That claim was false and has been
+  withdrawn.** The anchor cap confines members to a disk of radius
+  `stop_radius_m` *around the anchor* — diameter `2 × stop_radius_m` — while
+  `radius_m` is measured from the `sample_count`-weighted **centroid**. For an
+  asymmetric group (most samples near one edge of the disk, an outlier near the
+  opposite edge) the centroid is dragged toward the heavy side, so `radius_m`
+  can approach `2 × stop_radius_m`. Measured: ten dwells 49 m east of the
+  anchor plus one 49 m west (each individually admissible) centre 36.8 m east
+  and report `radius_m ≈ 86 m` against `stop_radius_m = 50`.
+
+  Restoring the stronger guarantee at full merge reach would require
+  re-checking every member against the *moving* centroid on each admission —
+  the O(n²) blow-up [[0011]] exists to prevent — and the only O(1) alternative
+  (capping members to ~`stop_radius_m / 2` of the anchor) halves the merge
+  reach, which is wrong for the large-site case this option exists to serve: a
+  warehouse, DC, or port is legitimately one "place," and callers size
+  `stop_radius_m` (up to 10 km) to match it. Fragmenting those dwells to satisfy
+  a tighter radius bound would be a worse answer than reporting the honest
+  spread.
+
+  So the API reports the **true** enclosing radius rather than a flattering one,
+  and — so the overshoot is never *silent* — `compute_insights` appends a
+  `quality.issues` note whenever a merged stop's `radius_m` exceeds the
+  configured `stop_radius_m`. Consumers needing a hard "one place" bound should
+  read that note (or set `merge_stops_within_m ≤ stop_radius_m`), not assume
+  `radius_m ≤ stop_radius_m`.
 - **Byte-identical when the cap never trips.** For the common case (jitter
   fragments all within `stop_radius_m` of the anchor) the added condition is a
   provable no-op; verified 0-diff over 2000 random within-radius merges.
