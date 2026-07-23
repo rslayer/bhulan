@@ -1929,7 +1929,8 @@
           },
           "radius_m": {
             "type": "number",
-            "title": "Radius M"
+            "title": "Radius M",
+            "description": "True enclosing spread: the distance from this stop's centroid to its farthest sample. For an unmerged stop this is <= stop_radius_m. When merge_stops_within_m is set, merging bounds each member to one stop_radius_m of its group's anchor, so an asymmetric merged group can report up to about 2x stop_radius_m \u2014 a quality issue is emitted when it does. Read this as the actual spread, not a guaranteed bound."
           },
           "sample_count": {
             "type": "integer",

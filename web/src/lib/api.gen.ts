@@ -861,7 +861,10 @@ export interface components {
             end_ts: string;
             /** Duration Min */
             duration_min: number;
-            /** Radius M */
+            /**
+             * Radius M
+             * @description True enclosing spread: the distance from this stop's centroid to its farthest sample. For an unmerged stop this is <= stop_radius_m. When merge_stops_within_m is set, merging bounds each member to one stop_radius_m of its group's anchor, so an asymmetric merged group can report up to about 2x stop_radius_m — a quality issue is emitted when it does. Read this as the actual spread, not a guaranteed bound.
+             */
             radius_m: number;
             /** Sample Count */
             sample_count: number;

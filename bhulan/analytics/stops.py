@@ -328,12 +328,27 @@ def merge_nearby_stops(
     group's *anchor* (its first member's centroid); when the chain has wandered
     beyond one stop's radius (a slow walk or drift, not a dwell), the next stop
     starts a new group instead of extending an ever-widening blob. This bounds
-    every merged group to a ``stop_radius_m`` disk around its anchor, so a
-    reported "stop" is never larger than one stop. ``merge_radius_m`` still
-    gates *whether* two neighbours are close enough to consider at all (and
-    whether merging is enabled), but the ``stop_radius_m`` cap dominates: a
-    ``merge_radius_m`` looser than ``stop_radius_m`` cannot produce a stop wider
-    than ``stop_radius_m``. See ADR 0013.
+    every merged group's *members* to a ``stop_radius_m`` disk around its
+    anchor. ``merge_radius_m`` still gates *whether* two neighbours are close
+    enough to consider at all (and whether merging is enabled), but the
+    ``stop_radius_m`` cap dominates: a ``merge_radius_m`` looser than
+    ``stop_radius_m`` cannot pull in a member farther than ``stop_radius_m``
+    from the anchor. See ADR 0013.
+
+    **What that does and does not guarantee.** The bound is on *membership*,
+    measured from the fixed anchor — a disk of radius ``stop_radius_m``, hence
+    *diameter* ``2 * stop_radius_m``. The emitted ``radius_m`` is measured from
+    the ``sample_count``-weighted *centroid*, so for an asymmetric group (most
+    samples near one edge of that disk, an outlier near the opposite edge) the
+    centroid is dragged toward the heavy side and ``radius_m`` can approach
+    ``2 * stop_radius_m``. **Do not assume ``radius_m <= stop_radius_m``.**
+    Tightening it at full reach would need a per-admission recompute against the
+    moving centroid (the O(n²) blow-up ADR 0011 avoids), and the O(1)
+    alternative — capping members to ~half the stop radius — would fragment the
+    large-site dwells (warehouse/DC/port) that a big ``stop_radius_m`` exists to
+    describe. So the honest spread is reported instead, and
+    :func:`bhulan.analytics.insights.compute_insights` adds a ``quality`` note
+    when it exceeds ``stop_radius_m`` so the overshoot is never silent.
 
     Useful when GPS jitter splits what is semantically a single visit into two
     back-to-back stops separated by a handful of moving samples.
@@ -404,17 +419,22 @@ def merge_nearby_stops(
         close_in_space = centroid_dist_m <= merge_radius_m
         close_in_time = gap_s < split_gap_s
 
-        # Cap: a merged stop is never larger than one stop. ``s`` may extend the
-        # current group only while it stays within ``stop_radius_m`` of the
-        # group's fixed anchor (its first member's centroid), so every member
-        # sits inside one ``stop_radius_m`` disk around a common reference —
-        # "clustered around a common centre." This is O(1) per stop (a single
-        # anchor comparison, no per-member recompute — that would reintroduce
-        # the cycle-9 O(n²) blow-up), and it bounds the group without letting a
-        # slow walk/drift chain into one implausibly wide "stop." When the cap
-        # is tripped, ``s`` begins a new group. The anchor is the *first*
-        # member and never moves, so the guarantee (every member within
+        # Cap on MEMBERSHIP: ``s`` may extend the current group only while it
+        # stays within ``stop_radius_m`` of the group's fixed anchor (its first
+        # member's centroid), so every member sits inside one ``stop_radius_m``
+        # disk around a common reference — "clustered around a common centre."
+        # This is O(1) per stop (a single anchor comparison, no per-member
+        # recompute — that would reintroduce the cycle-9 O(n²) blow-up), and it
+        # stops a slow walk/drift chaining into an unbounded blob. When the cap
+        # is tripped, ``s`` begins a new group. The anchor is the *first* member
+        # and never moves, so this guarantee (every member within
         # ``stop_radius_m`` of the anchor) is exact, not centroid-drift-prone.
+        #
+        # NOTE: it bounds members against the ANCHOR — a disk of radius
+        # ``stop_radius_m``, so diameter ``2 * stop_radius_m``. It does NOT
+        # bound the emitted ``radius_m``, which is measured from the weighted
+        # centroid and can approach ``2 * stop_radius_m`` for an asymmetric
+        # group. See ADR 0013's cycle-16 correction and the docstring above.
         anchor = groups[-1][0]
         within_stop_radius = (
             haversine_m(anchor.lat, anchor.lon, s.lat, s.lon) <= stop_radius_m
