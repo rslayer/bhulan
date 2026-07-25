@@ -68,4 +68,13 @@ def rate_limit_key(request: Request) -> str:
 
 #: Single process-wide rate limiter. Individual per-route limits are attached
 #: via ``@limiter.limit(...)`` on the handlers in ``bhulan/api/routes``.
+#:
+#: We deliberately do NOT set ``headers_enabled=True``: slowapi implements it by
+#: injecting headers into *successful* responses too, mutating the returned
+#: object — and our handlers return pydantic models, so it fails and turns a 200
+#: into a 500 (verified). It is also the only path by which slowapi would emit a
+#: ``Retry-After`` header, so instead a small custom 429 handler in
+#: ``bhulan/api/app.py`` adds ``Retry-After`` (the client contract that matters)
+#: without touching the success path. NB: storage is in-memory and per-process,
+#: so with multiple workers each keeps its own counters (see DEPLOY.md).
 limiter = Limiter(key_func=rate_limit_key, default_limits=[])

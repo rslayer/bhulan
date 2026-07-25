@@ -157,7 +157,28 @@ app.add_middleware(
 # and the *same* limiter instance is imported by routes/insights.py so its
 # exception handler's ``_inject_headers`` call sees the correct state.
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
+
+
+async def _rate_limit_handler_with_retry_after(request: Any, exc: RateLimitExceeded) -> Any:
+    """slowapi's default 429, plus a ``Retry-After`` header.
+
+    slowapi only emits ``Retry-After`` when ``headers_enabled=True``, but that
+    also injects headers into successful responses and 500s our pydantic
+    handlers (see ``bhulan/api/limiter.py``). So we keep the default 429 body and
+    just add the header here — the value is the limit's window in seconds (e.g.
+    60 for ``30/minute``), which is a safe upper bound on how long to back off.
+    """
+    response = _rate_limit_exceeded_handler(request, exc)
+    if "retry-after" not in {k.lower() for k in response.headers}:
+        try:
+            retry_after = int(exc.limit.limit.get_expiry())  # window length in seconds
+        except Exception:
+            retry_after = 60
+        response.headers["Retry-After"] = str(retry_after)
+    return response
+
+
+app.add_exception_handler(RateLimitExceeded, _rate_limit_handler_with_retry_after)  # type: ignore[arg-type]
 
 
 def _scrub_non_finite(obj: Any) -> Any:
