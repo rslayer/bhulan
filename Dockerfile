@@ -71,4 +71,8 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=5s \
         sys.exit(0 if urllib.request.urlopen(f'http://127.0.0.1:{p}/v1/healthz', timeout=3).status == 200 else 1)" \
         || exit 1
 
-CMD ["sh", "-c", "uvicorn bhulan.api.app:app --host 0.0.0.0 --port ${PORT:-8000}"]
+# --workers: each worker is a full process, so CPU-bound analytics scale ~linearly
+# across them (they bypass the GIL). Set WEB_CONCURRENCY ≈ the container's vCPU
+# count. Default 2 gives real concurrency out of the box; see DEPLOY.md for the
+# per-process rate-limit caveat.
+CMD ["sh", "-c", "uvicorn bhulan.api.app:app --host 0.0.0.0 --port ${PORT:-8000} --workers ${WEB_CONCURRENCY:-2}"]

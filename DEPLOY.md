@@ -76,3 +76,33 @@ Only add persistence when the product needs it:
 - **SQLite auth/history**: set `BHULAN_AUTH_ENABLED=true`, `BHULAN_DB_PATH` to a writable persistent path, and `BHULAN_AUTH_SECRET` to a long random value. Configure SMTP before inviting real users.
 
 For the first free open-source release, leave both off.
+
+## Scaling: concurrency and throughput
+
+The `/v1` analytics are CPU-bound (NumPy plus Python), so a **single** uvicorn
+worker is GIL-bound — measured ~60 req/s and ~425 ms p50 for a 300-point track
+under concurrent load. Each `uvicorn --workers N` is a **separate process**, so
+CPU-bound work scales ~linearly across workers up to the box's vCPU count.
+
+- **Set `WEB_CONCURRENCY` ≈ the container's vCPU count.** The start command
+  (Dockerfile / Procfile) defaults to `--workers ${WEB_CONCURRENCY:-2}`. Each
+  worker is a full process (its own memory), so on a **constrained free tier**
+  (e.g. Render free ≈ 0.1 CPU / 512 MB) set `WEB_CONCURRENCY=1` — two processes
+  there only contend for one core and double the memory footprint. On a 2-vCPU
+  box use `2`, on a 4-vCPU box `4` (≈ that many × the single-process throughput).
+- Behaviour is correct under concurrency regardless: a load test of 200
+  simultaneous identical requests returned byte-identical bodies (no shared-state
+  races), no request returned a 5xx under contention, and a burst of 15k-point
+  requests stayed bounded (~5 s each) rather than tying up a worker — the stop
+  scan is capped (see `spec/adrs/0016-stop-scan-work-budget.md`).
+
+### Rate-limit caveat with multiple workers
+
+The per-IP rate limiter (`slowapi`) uses **in-memory, per-process** storage, so
+with `N` workers each keeps its own counters — the effective limit becomes
+roughly `N ×` the configured value per IP (e.g. `30/minute` per worker). That is
+fine for a demo (it stays a guard, not an exact quota). For an **exact** limit
+shared across workers, point slowapi at a shared store — pass a Redis
+`storage_uri` to the `Limiter` in `bhulan/api/limiter.py`. A 429 now carries a
+`Retry-After` header (plus `X-RateLimit-*`) so a client knows how long to back
+off instead of hammering.
